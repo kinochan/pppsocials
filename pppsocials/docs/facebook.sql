@@ -1,0 +1,4 @@
+CREATE TABLE facebook_connection (
+  id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+  encrypted_pages LONGTEXT NOT NULL
+) CHARACTER SET utf8mb4;

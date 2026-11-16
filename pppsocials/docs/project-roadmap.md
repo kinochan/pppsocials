@@ -28,6 +28,6 @@
 
 ### Integrations
 - YouTube
-- Facebook
+- Facebook: connect Pages with Facebook Login for Business; Story publishing still needed
 - Instagram: connect professional accounts with Unified Login; publishing and webhooks still needed
 - TikTok

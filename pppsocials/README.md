@@ -19,9 +19,9 @@ when possible and the upload reports an error. Existing files are not imported.
 The Instagram connection uses Meta's Instagram API with Unified Login and stores
 one shared business connection for the app. It does not publish videos yet.
 
-**The app does not have team login yet.** The connection is disabled by default.
+**The app does not have team login yet.** The connections are disabled by default.
 Before enabling it, protect the entire application, including `/settings` and
-all `/api/instagram/*` routes, with authentication at Nginx or another trusted
+all `/api/instagram/*` and `/api/facebook/*` routes, with authentication at Nginx or another trusted
 reverse proxy. Restrict direct access to the Node.js port so the proxy cannot be
 bypassed. Anyone who can access these routes can replace the shared connection.
 
@@ -54,6 +54,22 @@ any other proxy or monitoring system not to log query strings for
 returned to the browser. Do not share screenshots containing tokens or secrets.
 Meta app review and appropriate access levels may be needed for users without
 app roles. Webhooks and Instagram publishing are not implemented yet.
+
+## Facebook Page connection
+
+Facebook Pages use a separate Facebook Login for Business configuration with a
+user access token and the Page permissions required by Meta's Stories API.
+Apply `docs/facebook.sql` to the app database and set `FACEBOOK_CONFIG_ID` to
+that configuration's ID. Register `<APP_URL>/api/facebook/callback` in Meta's
+valid OAuth redirect URLs and exclude its query string from proxy access logs.
+Set `FACEBOOK_CONNECTION_ENABLED=true` only after protecting the entire app and
+blocking direct access to the Node.js port. The connection shares `APP_URL`,
+`META_APP_ID`, `META_APP_SECRET`, and `INSTAGRAM_TOKEN_KEY` with Instagram.
+
+Use **Connect Facebook Pages** in Settings to grant access. Reconnecting
+replaces the saved Pages. Page tokens are encrypted on the server and never
+sent to the browser. App Review, Page permissions, and Page publishing
+authorization may be required. This connection does not publish Stories yet.
 
 ## Getting Started
 

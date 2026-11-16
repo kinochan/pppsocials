@@ -1,6 +1,6 @@
-import { createCipheriv, randomBytes } from "crypto";
 import type { RowDataPacket } from "mysql2";
 import { db } from "@/src/lib/db";
+import { encryptMetaSecret } from "@/src/lib/meta-crypto";
 
 const graphUrl = "https://graph.facebook.com/v27.0";
 export const stateCookie = "__Host-instagram-oauth-state";
@@ -115,10 +115,7 @@ export async function connectInstagram(code: string, config: InstagramConfig) {
   if (after) throw new InstagramConnectionError("Meta returned too many account pages.");
   if (accounts.length === 0) throw new InstagramConnectionError("No Instagram accounts were shared.");
 
-  const iv = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", config.key, iv);
-  const ciphertext = Buffer.concat([cipher.update(token, "utf8"), cipher.final()]);
-  const encryptedToken = [iv, cipher.getAuthTag(), ciphertext].map((part) => part.toString("base64")).join(".");
+  const encryptedToken = encryptMetaSecret(token, config.key);
 
   try {
     await db.execute(

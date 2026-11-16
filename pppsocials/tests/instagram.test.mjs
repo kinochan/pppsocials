@@ -33,7 +33,11 @@ async function load(file, dependencies, fetchMock, variables = env) {
 }
 
 async function setup(fetchMock, execute = async () => {}) {
-  const lib = await load(path.join("src", "lib", "instagram.ts"), { "@/src/lib/db": { db: { execute } } }, fetchMock);
+  const crypto = await load(path.join("src", "lib", "meta-crypto.ts"), {}, fetchMock);
+  const lib = await load(path.join("src", "lib", "instagram.ts"), {
+    "@/src/lib/db": { db: { execute } },
+    "@/src/lib/meta-crypto": crypto,
+  }, fetchMock);
   const dependencies = { "@/src/lib/instagram": lib };
   const connect = await load(path.join("app", "api", "instagram", "connect", "route.ts"), dependencies, fetchMock);
   const callback = await load(path.join("app", "api", "instagram", "callback", "route.ts"), dependencies, fetchMock);
@@ -131,7 +135,11 @@ test("reports a database failure without exposing the token", async () => {
 });
 
 test("requires explicit enablement and a same-origin connection request", async () => {
-  const lib = await load(path.join("src", "lib", "instagram.ts"), { "@/src/lib/db": { db: {} } }, fetch, {});
+  const crypto = await load(path.join("src", "lib", "meta-crypto.ts"), {}, fetch);
+  const lib = await load(path.join("src", "lib", "instagram.ts"), {
+    "@/src/lib/db": { db: {} },
+    "@/src/lib/meta-crypto": crypto,
+  }, fetch, {});
   assert.equal(lib.instagramConfig(), null);
   const { connect } = await setup(fetch);
   const response = await connect.POST(new Request("https://example.test/api/instagram/connect", {
