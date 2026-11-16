@@ -9,10 +9,25 @@ the MySQL database, then apply the schema once to that database:
 mysql -u YOUR_USER -p YOUR_DATABASE < docs/videos.sql
 ```
 
-New uploads save their title, description, and path relative to the application
-directory in the `videos` table. Files are stored in the application's `uploads`
-directory with unique names. If saving metadata fails, the new file is removed
-when possible and the upload reports an error. Existing files are not imported.
+New uploads save their title, description, generated filename, and path relative
+to the application directory in the `videos` table. Files are stored in the
+application's `uploads` directory with unique names. If saving metadata fails,
+the new file is removed when possible and the upload reports an error. Existing
+files are not imported.
+
+If an existing `videos` table was created from an older version of
+`docs/videos.sql` and has no `filename` column, back up the database, stop
+uploads, and run the following before deploying the updated app:
+
+```sql
+ALTER TABLE videos ADD COLUMN filename VARCHAR(255) NULL;
+UPDATE videos SET filename = SUBSTRING_INDEX(REPLACE(filepath, CHAR(92), '/'), '/', -1)
+  WHERE filename IS NULL;
+ALTER TABLE videos MODIFY COLUMN filename VARCHAR(255) NOT NULL;
+```
+
+Do not run this migration if the table already has a `filename` column. Resume
+uploads after deploying and restarting the app.
 
 Videos can be up to 1 GB (1,000,000,000 bytes). Uploads are streamed to disk,
 and text fields are limited to 1 MiB. In the Nginx server configuration, allow

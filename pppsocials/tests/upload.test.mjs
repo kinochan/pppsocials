@@ -52,15 +52,17 @@ test("saves metadata and distinct files for uploads with the same name", async (
     assert.notEqual(firstResult.filename, secondResult.filename);
     assert.equal(await readFile(firstResult.savedTo, "utf8"), "video content");
     assert.equal(await readFile(secondResult.savedTo, "utf8"), "video content");
-    assert.match(calls[0][0], /INSERT INTO videos/);
+    assert.equal(calls[0][0], "INSERT INTO videos (title, description, filename, filepath) VALUES (?, ?, ?, ?)");
     assert.deepEqual(calls[0][1], [
       "My title",
       "Post description",
+      firstResult.filename,
       path.join("uploads", firstResult.filename),
     ]);
     assert.deepEqual(calls[1][1], [
       "Another title",
       "",
+      secondResult.filename,
       path.join("uploads", secondResult.filename),
     ]);
   } finally {

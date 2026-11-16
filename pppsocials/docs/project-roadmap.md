@@ -18,7 +18,7 @@
 ## Next Tasks
 
 ### Database
-- Save title, description, and filepath for new uploads
+- Save title, description, filename, and filepath for new uploads
   (requires the `videos` table in `docs/videos.sql`)
 - Existing uploaded files are not automatically imported
 

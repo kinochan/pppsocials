@@ -114,8 +114,8 @@ export async function POST(request: Request) {
     }
 
     await db.execute(
-      "INSERT INTO videos (title, description, filepath) VALUES (?, ?, ?)",
-      [title.trim(), description, relativePath]
+      "INSERT INTO videos (title, description, filename, filepath) VALUES (?, ?, ?, ?)",
+      [title.trim(), description, filename, relativePath]
     );
 
     return NextResponse.json({
