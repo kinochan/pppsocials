@@ -41,7 +41,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-async function graphRequest(url: URL, accessToken?: string): Promise<unknown> {
+async function graphRequest(url: URL, operation: string, accessToken?: string): Promise<unknown> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -54,7 +54,7 @@ async function graphRequest(url: URL, accessToken?: string): Promise<unknown> {
     throw new InstagramConnectionError("Meta API request could not be completed.");
   }
   if (!response.ok) {
-    throw new InstagramConnectionError(`Meta API request failed with HTTP ${response.status}.`);
+    throw new InstagramConnectionError(`Meta ${operation} request failed with HTTP ${response.status}.`);
   }
   try {
     return await response.json();
@@ -67,8 +67,9 @@ export async function connectInstagram(code: string, config: InstagramConfig) {
   const tokenUrl = new URL(`${graphUrl}/oauth/access_token`);
   tokenUrl.searchParams.set("client_id", config.appId);
   tokenUrl.searchParams.set("client_secret", config.appSecret);
+  tokenUrl.searchParams.set("redirect_uri", config.redirectUrl);
   tokenUrl.searchParams.set("code", code);
-  const tokenResult = await graphRequest(tokenUrl);
+  const tokenResult = await graphRequest(tokenUrl, "authorization code exchange");
   if (!isRecord(tokenResult) || typeof tokenResult.access_token !== "string" || !tokenResult.access_token) {
     throw new InstagramConnectionError("Meta did not return an access token.");
   }
@@ -76,7 +77,7 @@ export async function connectInstagram(code: string, config: InstagramConfig) {
 
   const businessUrl = new URL(`${graphUrl}/me`);
   businessUrl.searchParams.set("fields", "client_business_id");
-  const business = await graphRequest(businessUrl, token);
+  const business = await graphRequest(businessUrl, "business lookup", token);
   if (!isRecord(business) || typeof business.client_business_id !== "string" || !business.client_business_id) {
     throw new InstagramConnectionError("Meta did not return a business ID.");
   }
@@ -89,7 +90,7 @@ export async function connectInstagram(code: string, config: InstagramConfig) {
     accountsUrl.searchParams.set("fields", "id,username");
     accountsUrl.searchParams.set("limit", "100");
     if (after) accountsUrl.searchParams.set("after", after);
-    const result = await graphRequest(accountsUrl, token);
+    const result = await graphRequest(accountsUrl, "Instagram account lookup", token);
     if (!isRecord(result) || !Array.isArray(result.data)) {
       throw new InstagramConnectionError("Meta returned an invalid account list.");
     }

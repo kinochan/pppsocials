@@ -85,6 +85,7 @@ test("connects accounts across pages and saves the token encrypted", async () =>
   assert.equal(response.status, 303);
   assert.equal(new URL(response.headers.get("location")).searchParams.get("instagram"), "connected");
   assert.match(response.headers.get("set-cookie"), /Max-Age=0/);
+  assert.equal(calls[0].url.searchParams.get("redirect_uri"), loginUrl.searchParams.get("redirect_uri"));
   assert.equal(calls[3].url.searchParams.get("after"), "cursor-1");
   assert.equal(calls[2].options.headers.Authorization, "Bearer private-token");
   assert.equal(saved.length, 1);
@@ -97,6 +98,25 @@ test("connects accounts across pages and saves the token encrypted", async () =>
   const decipher = createDecipheriv("aes-256-gcm", Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex"), iv);
   decipher.setAuthTag(tag);
   assert.equal(Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString(), "private-token");
+});
+
+test("identifies which Meta request failed without exposing credentials", async () => {
+  for (const [failureAt, operation] of [
+    [1, "authorization code exchange"],
+    [2, "business lookup"],
+    [3, "Instagram account lookup"],
+  ]) {
+    let count = 0;
+    const { lib } = await setup(async () => {
+      count++;
+      if (count === failureAt) return new Response("private-token", { status: 400 });
+      return Response.json(count === 1 ? { access_token: "private-token" } : { client_business_id: "business" });
+    });
+    await assert.rejects(
+      lib.connectInstagram("private-code", lib.instagramConfig()),
+      (error) => error.message === `Meta ${operation} request failed with HTTP 400.`
+    );
+  }
 });
 
 test("rejects invalid OAuth state before contacting Meta", async () => {
