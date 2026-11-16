@@ -9,7 +9,7 @@ export type FacebookPage = { id: string; name: string; accessToken: string };
 export class FacebookConnectionError extends Error {}
 
 export function facebookConfig() {
-  if (process.env.FACEBOOK_CONNECTION_ENABLED == "true") return null;
+  if (process.env.FACEBOOK_CONNECTION_ENABLED !== "true") return null;
   const { META_APP_ID, META_APP_SECRET, FACEBOOK_CONFIG_ID, APP_URL, INSTAGRAM_TOKEN_KEY } = process.env;
   if (!META_APP_ID || !META_APP_SECRET || !FACEBOOK_CONFIG_ID || !APP_URL ||
       !INSTAGRAM_TOKEN_KEY || !/^[0-9a-f]{64}$/i.test(INSTAGRAM_TOKEN_KEY)) {
