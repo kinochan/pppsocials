@@ -10,6 +10,10 @@ type FacebookStatus =
   | { enabled: false }
   | { enabled: true; pages: { id: string; name: string }[] | null };
 
+type YouTubeStatus =
+  | { enabled: false }
+  | { enabled: true; channels: { id: string; title: string }[] };
+
 export default function SettingsPage() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [error, setError] = useState("");
@@ -17,12 +21,16 @@ export default function SettingsPage() {
   const [facebookStatus, setFacebookStatus] = useState<FacebookStatus | null>(null);
   const [facebookError, setFacebookError] = useState("");
   const [facebookResult, setFacebookResult] = useState("");
+  const [youtubeStatus, setYouTubeStatus] = useState<YouTubeStatus | null>(null);
+  const [youtubeError, setYouTubeError] = useState("");
+  const [youtubeResult, setYouTubeResult] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const outcome = params.get("instagram");
     const facebookOutcome = params.get("facebook");
-    if (outcome || facebookOutcome) window.history.replaceState(null, "", "/settings");
+    const youtubeOutcome = params.get("youtube");
+    if (outcome || facebookOutcome || youtubeOutcome) window.history.replaceState(null, "", "/settings");
 
     async function loadStatus() {
       try {
@@ -53,6 +61,21 @@ export default function SettingsPage() {
       }
     }
     void loadFacebookStatus();
+
+    async function loadYouTubeStatus() {
+      try {
+        const response = await fetch("/api/youtube/status", { cache: "no-store" });
+        if (!response.ok) throw new Error("Status request failed");
+        setYouTubeStatus(await response.json());
+        if (youtubeOutcome === "connected") setYouTubeResult("YouTube channel saved.");
+        if (youtubeOutcome === "cancelled") setYouTubeError("YouTube authorization was cancelled or rejected.");
+        if (youtubeOutcome === "invalid-state") setYouTubeError("The connection request expired or was invalid. Please try again.");
+        if (youtubeOutcome === "failed") setYouTubeError("Could not connect YouTube. Check the server logs and try again.");
+      } catch {
+        setYouTubeError("Could not load YouTube connection status. Check the server configuration and database.");
+      }
+    }
+    void loadYouTubeStatus();
   }, []);
 
   return (
@@ -83,6 +106,36 @@ export default function SettingsPage() {
             <form action="/api/instagram/connect" method="post">
               <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
                 {status.accounts ? "Reconnect or replace accounts" : "Connect Instagram"}
+              </button>
+            </form>
+          </>
+        )}
+      </section>
+      <section className="border rounded-lg p-4 bg-white shadow mt-6">
+        <h2 className="text-xl font-semibold mb-3">YouTube Shorts</h2>
+        <p className="mb-3">
+          Connect YouTube channels one at a time. This requests read-only access;
+          publishing Shorts will require additional permission later.
+        </p>
+        {youtubeResult && <p role="status" className="mb-3 text-green-700">{youtubeResult}</p>}
+        {youtubeError && <p role="alert" className="mb-3 text-red-700">{youtubeError}</p>}
+        {!youtubeStatus && !youtubeError && <p>Loading connection status...</p>}
+        {youtubeStatus && !youtubeStatus.enabled && (
+          <p>YouTube connection is disabled. See the server setup instructions in the README.</p>
+        )}
+        {youtubeStatus?.enabled && (
+          <>
+            {youtubeStatus.channels.length > 0 ? (
+              <>
+                <p className="mb-2">Saved channels (connection not checked with Google):</p>
+                <ul className="list-disc pl-6 mb-3">
+                  {youtubeStatus.channels.map((channel) => <li key={channel.id}>{channel.title}</li>)}
+                </ul>
+              </>
+            ) : <p className="mb-3">No YouTube channels connected.</p>}
+            <form action="/api/youtube/connect" method="post">
+              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Connect a YouTube channel
               </button>
             </form>
           </>

@@ -120,6 +120,39 @@ replaces the saved Pages. Page tokens are encrypted on the server and never
 sent to the browser. App Review, Page permissions, and Page publishing
 authorization may be required. This connection does not publish Stories yet.
 
+## YouTube channels
+
+The YouTube connection stores multiple channels, authorized one at a time. It
+requests only the `youtube.readonly` scope; Shorts publishing is not implemented
+and will require additional authorization.
+
+**Protect the entire app with authentication at a trusted reverse proxy and
+block direct access to the Node.js port before enabling this feature.** Anyone
+who can access Settings and the YouTube routes can add or reconnect channels.
+
+1. Apply `docs/youtube.sql` to the app database once.
+2. In Google Cloud, enable **YouTube Data API v3** and configure the OAuth
+   consent screen. Create a **Web application** OAuth client and register the
+   exact redirect URI `<APP_URL>/api/youtube/callback`.
+3. Configure these server-side environment variables (never commit or share
+   the client secret):
+   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`: the web OAuth client credentials.
+   - `APP_URL`: the app's public HTTPS origin.
+   - `INSTAGRAM_TOKEN_KEY`: the same persistent 32-byte encryption key used by
+     the existing integrations, encoded as 64 hex characters. Back it up
+     securely; changing it makes saved refresh tokens unreadable.
+   - `YOUTUBE_CONNECTION_ENABLED=true`: set only after protecting the app.
+4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
+   YouTube channel** and authorize the intended channel. Repeat for each
+   channel; reconnecting one updates only that channel.
+
+Google may require OAuth verification, and an external app in testing must add
+the relevant Google accounts as test users. Testing-mode refresh tokens can
+expire after seven days; revoked or expired tokens require reconnecting.
+Settings shows saved channels without checking whether their tokens still work.
+Do not log query strings or sensitive referrers for `/api/youtube/callback`;
+the callback contains a temporary authorization code.
+
 ## Getting Started
 
 First, run the development server:
