@@ -14,6 +14,18 @@ directory in the `videos` table. Files are stored in the application's `uploads`
 directory with unique names. If saving metadata fails, the new file is removed
 when possible and the upload reports an error. Existing files are not imported.
 
+Videos can be up to 1 GB (1,000,000,000 bytes). Uploads are streamed to disk,
+and text fields are limited to 1 MiB. In the Nginx server configuration, allow
+enough space for the video and multipart form overhead:
+
+```nginx
+client_max_body_size 1001m;
+```
+
+Check for a lower limit in any `/api/upload` location or upstream proxy, then
+test the Nginx configuration and reload it. Ensure the app's `uploads` directory
+is writable and has enough free disk space.
+
 ## Instagram connection
 
 The Instagram connection uses Meta's Instagram API with Unified Login and stores

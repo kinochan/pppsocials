@@ -16,6 +16,10 @@ export default function UploadPage() {
       alert("Please select a video file.");
       return;
     }
+    if (file.size > 1_000_000_000) {
+      alert("Video must be 1 GB or smaller.");
+      return;
+    }
 
     const formData = new FormData();
 
@@ -32,6 +36,10 @@ export default function UploadPage() {
         }
       );
 
+      if (response.status === 413) {
+        alert("The video is too large for the server to accept. The maximum video size is 1 GB.");
+        return;
+      }
       const result = await response.json();
       if (!response.ok) {
         alert(result.message || "Upload failed.");
