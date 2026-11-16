@@ -15,6 +15,12 @@ application's `uploads` directory with unique names. If saving metadata fails,
 the new file is removed when possible and the upload reports an error. Existing
 files are not imported.
 
+The Library lists uploaded records and streams their files for playback. Playback
+depends on the video format and codec supported by the browser. Publishing and
+post descriptions are not implemented yet. The Library and its video endpoints
+do not have built-in authentication: protect the entire app with a trusted
+reverse proxy and restrict direct access to the Node.js port.
+
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
 uploads, and run the following before deploying the updated app:
