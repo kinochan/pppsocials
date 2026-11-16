@@ -1,5 +1,60 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Upload database setup
+
+Configure `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` for
+the MySQL database, then apply the schema once to that database:
+
+```bash
+mysql -u YOUR_USER -p YOUR_DATABASE < docs/videos.sql
+```
+
+New uploads save their title, description, and path relative to the application
+directory in the `videos` table. Files are stored in the application's `uploads`
+directory with unique names. If saving metadata fails, the new file is removed
+when possible and the upload reports an error. Existing files are not imported.
+
+## Instagram connection
+
+The Instagram connection uses Meta's Instagram API with Unified Login and stores
+one shared business connection for the app. It does not publish videos yet.
+
+**The app does not have team login yet.** The connection is disabled by default.
+Before enabling it, protect the entire application, including `/settings` and
+all `/api/instagram/*` routes, with authentication at Nginx or another trusted
+reverse proxy. Restrict direct access to the Node.js port so the proxy cannot be
+bypassed. Anyone who can access these routes can replace the shared connection.
+
+1. Apply `docs/instagram.sql` to the same MySQL database as the app:
+
+   ```bash
+   mysql -u YOUR_USER -p YOUR_DATABASE < docs/instagram.sql
+   ```
+
+2. Set these server-side environment variables (never commit them to GitHub):
+   - `APP_URL`: the app's public HTTPS origin, for example `https://mbasocials.mbattractions.com`
+   - `META_APP_ID` and `META_APP_SECRET`: the Meta app ID and app secret (not the Instagram app credentials)
+   - `META_CONFIG_ID`: the Unified Login configuration ID
+   - `INSTAGRAM_TOKEN_KEY`: a persistent, randomly generated 32-byte key encoded as 64 hex characters; generate one privately with `openssl rand -hex 32`
+   - `INSTAGRAM_CONNECTION_ENABLED=true`: set only after access is protected
+
+   Keep a secure backup of the encryption key. Changing or losing it makes
+   existing saved tokens unusable; reconnect the account if that happens.
+3. In Meta's Unified Login setup, register and select the exact redirect URL
+   `<APP_URL>/api/instagram/callback` (not just the site root). The URL must
+   match `APP_URL` exactly. Configure HTTPS and restart the Node.js app after
+   setting its environment variables.
+4. Open Settings and select **Connect Instagram**. Approve access and select
+   the intended business portfolio and Instagram account(s). Reconnecting
+   replaces the previously saved connection.
+
+The callback URL contains a temporary authorization code. Configure Nginx and
+any other proxy or monitoring system not to log query strings for
+`/api/instagram/callback`. Tokens are encrypted before storage and are not
+returned to the browser. Do not share screenshots containing tokens or secrets.
+Meta app review and appropriate access levels may be needed for users without
+app roles. Webhooks and Instagram publishing are not implemented yet.
+
 ## Getting Started
 
 First, run the development server:

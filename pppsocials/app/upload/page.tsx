@@ -23,17 +23,26 @@ export default function UploadPage() {
     formData.append("description", description);
     formData.append("file", file);
 
-    const response = await fetch(
-      "/api/upload",
-      {
-        method: "POST",
-        body: formData,
+    try {
+      const response = await fetch(
+        "/api/upload",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) {
+        alert(result.message || "Upload failed.");
+        return;
       }
-    );
 
-    const result = await response.json();
-
-    alert(JSON.stringify(result, null, 2));
+      alert(JSON.stringify(result, null, 2));
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Upload failed. Please try again.");
+    }
   }
 
   return (
@@ -59,6 +68,7 @@ export default function UploadPage() {
             }
             className="border p-2 w-full rounded"
             placeholder="Enter video title"
+            maxLength={255}
             required
           />
         </div>

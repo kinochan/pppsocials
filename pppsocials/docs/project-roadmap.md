@@ -18,9 +18,9 @@
 ## Next Tasks
 
 ### Database
-- Save title
-- Save description
-- Save filepath
+- Save title, description, and filepath for new uploads
+  (requires the `videos` table in `docs/videos.sql`)
+- Existing uploaded files are not automatically imported
 
 ### Library
 - Edit video
@@ -29,5 +29,5 @@
 ### Integrations
 - YouTube
 - Facebook
-- Instagram
+- Instagram: connect professional accounts with Unified Login; publishing and webhooks still needed
 - TikTok
