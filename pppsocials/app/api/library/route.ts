@@ -6,13 +6,15 @@ interface VideoRow extends RowDataPacket {
   id: string;
   title: string;
   description: string | null;
+  filename: string;
+  original_filename: string | null;
 }
 
 export async function GET() {
   await connection();
   try {
     const [videos] = await db.execute<VideoRow[]>(
-      "SELECT CAST(id AS CHAR) AS id, title, description FROM videos ORDER BY id DESC"
+      "SELECT CAST(id AS CHAR) AS id, title, description, filename, original_filename FROM videos ORDER BY id DESC"
     );
     return NextResponse.json(videos, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

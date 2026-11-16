@@ -24,7 +24,6 @@
 
 ### Library
 - Edit video
-- Delete video
 - Publish with a shared post description to Instagram, Facebook, TikTok, and YouTube Shorts
 
 ### Integrations

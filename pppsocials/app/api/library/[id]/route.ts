@@ -3,6 +3,7 @@ import { open } from "fs/promises";
 import type { RowDataPacket } from "mysql2";
 import path from "path";
 import { db } from "@/src/lib/db";
+import { removeUnreferencedFile, uploadFilePath, validVideoId, withVideoLock } from "@/src/lib/videos";
 
 interface VideoRow extends RowDataPacket {
   filepath: string;
@@ -18,7 +19,7 @@ const contentTypes: Record<string, string> = {
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
-  if (!/^[1-9]\d{0,19}$/.test(id) || BigInt(id) > BigInt("18446744073709551615")) {
+  if (!validVideoId(id)) {
     return new Response("Video not found.", { status: 404 });
   }
 
@@ -112,5 +113,46 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   } catch (error) {
     console.error("Failed to load library video:", error);
     return new Response("Unable to load video.", { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  if (!validVideoId(id)) return new Response("Video not found.", { status: 404 });
+
+  let input: unknown;
+  try {
+    input = await request.json();
+  } catch {
+    return Response.json({ message: "Invalid deletion request." }, { status: 400 });
+  }
+  if (typeof input !== "object" || input === null || !("filename" in input) ||
+      typeof input.filename !== "string" || !input.filename) {
+    return Response.json({ message: "Invalid deletion request." }, { status: 400 });
+  }
+  const expectedFilename = input.filename;
+
+  try {
+    const result = await withVideoLock(async (connection) => {
+      const [rows] = await connection.execute<RowDataPacket[]>(
+        "SELECT filename, filepath FROM videos WHERE id = ?", [id]
+      );
+      if (!rows.length || rows[0].filename !== expectedFilename) return { conflict: true };
+      const storedPath: string = rows[0].filepath;
+      uploadFilePath(storedPath);
+      await connection.execute("DELETE FROM videos WHERE id = ?", [id]);
+      try {
+        await removeUnreferencedFile(connection, storedPath);
+      } catch (error) {
+        console.error("Could not clean up the deleted video:", error);
+        return { conflict: false, warning: "The video was removed from the library, but its file could not be removed from the server." };
+      }
+      return { conflict: false };
+    });
+    if (result.conflict) return Response.json({ message: "The video changed. Refresh the library and try again." }, { status: 409 });
+    return Response.json({ success: true, warning: result.warning });
+  } catch (error) {
+    console.error("Failed to delete video:", error);
+    return Response.json({ message: "Unable to delete the video." }, { status: 500 });
   }
 }

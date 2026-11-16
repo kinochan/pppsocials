@@ -3,5 +3,6 @@ CREATE TABLE videos (
   title VARCHAR(255) NOT NULL,
   description LONGTEXT NOT NULL,
   filename VARCHAR(255) NOT NULL,
+  original_filename VARCHAR(255) NULL,
   filepath VARCHAR(255) NOT NULL
 ) CHARACTER SET utf8mb4;

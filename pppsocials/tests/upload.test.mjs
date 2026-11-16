@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -10,7 +10,25 @@ import ts from "typescript";
 const require = createRequire(import.meta.url);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 
-async function loadHandler(directory, execute, busboyOverride) {
+async function loadHandler(directory, execute, busboyOverride, customConnection) {
+  const helperSource = await readFile(path.join(testDir, "..", "src", "lib", "videos.ts"), "utf8");
+  const helperCompiled = ts.transpileModule(helperSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
+  }).outputText;
+  const connection = customConnection ?? {
+    async execute(sql, params) {
+      if (sql.startsWith("SELECT GET_LOCK")) return [[{ acquired: 1 }]];
+      if (sql.startsWith("SELECT RELEASE_LOCK")) return [[{ released: 1 }]];
+      if (sql.includes("original_filename FROM videos")) return [[]];
+      return execute(sql, params);
+    },
+    release() {},
+    destroy() {},
+  };
+  const db = { execute, getConnection: async () => connection };
+  const helper = {};
+  const helperRequire = (name) => name === "@/src/lib/db" ? { db } : require(name);
+  new Function("require", "exports", "process", helperCompiled)(helperRequire, helper, { cwd: () => directory });
   const source = await readFile(
     path.join(testDir, "..", "app", "api", "upload", "route.ts"),
     "utf8"
@@ -20,7 +38,7 @@ async function loadHandler(directory, execute, busboyOverride) {
   }).outputText;
   const exports = {};
   const mockRequire = (name) => {
-    if (name === "@/src/lib/db") return { db: { execute } };
+    if (name === "@/src/lib/videos") return helper;
     if (name === "busboy" && busboyOverride) return busboyOverride;
     return require(name);
   };
@@ -37,7 +55,7 @@ function request(title, description = "Post description") {
   return new Request("http://localhost/api/upload", { method: "POST", body: form });
 }
 
-test("saves metadata and distinct files for uploads with the same name", async () => {
+test("saves the original filename with each upload", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "pppsocials-upload-"));
   try {
     const calls = [];
@@ -52,19 +70,82 @@ test("saves metadata and distinct files for uploads with the same name", async (
     assert.notEqual(firstResult.filename, secondResult.filename);
     assert.equal(await readFile(firstResult.savedTo, "utf8"), "video content");
     assert.equal(await readFile(secondResult.savedTo, "utf8"), "video content");
-    assert.equal(calls[0][0], "INSERT INTO videos (title, description, filename, filepath) VALUES (?, ?, ?, ?)");
+    assert.equal(calls[0][0], "INSERT INTO videos (title, description, filename, original_filename, filepath) VALUES (?, ?, ?, ?, ?)");
     assert.deepEqual(calls[0][1], [
       "My title",
       "Post description",
       firstResult.filename,
+      "clip.mp4",
       path.join("uploads", firstResult.filename),
     ]);
     assert.deepEqual(calls[1][1], [
       "Another title",
       "",
       secondResult.filename,
+      "clip.mp4",
       path.join("uploads", secondResult.filename),
     ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("requires confirmation and replaces only the selected unchanged match", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pppsocials-upload-"));
+  const oldFilename = "12345678-1234-1234-1234-123456789abc-clip.mp4";
+  const record = {
+    id: "4", title: "Original", description: "Old description", filename: oldFilename,
+    original_filename: null, filepath: path.join("uploads", oldFilename),
+  };
+  try {
+    await mkdir(path.join(directory, "uploads"));
+    await writeFile(path.join(directory, record.filepath), "old video");
+    const connection = {
+      async execute(sql, params) {
+        if (sql.startsWith("SELECT GET_LOCK")) return [[{ acquired: 1 }]];
+        if (sql.startsWith("SELECT RELEASE_LOCK")) return [[{ released: 1 }]];
+        if (sql.includes("original_filename FROM videos")) {
+          assert.deepEqual(params, ["CLIP.mp4", "CLIP.mp4", "CLIP.mp4"]);
+          return [[record]];
+        }
+        if (sql.startsWith("SELECT filepath")) return [[{ filepath: record.filepath }]];
+        if (sql.startsWith("UPDATE videos")) {
+          assert.equal(params[0], "New title");
+          assert.equal(params[1], "New description");
+          assert.equal(params[3], "CLIP.mp4");
+          assert.equal(params[5], "4");
+          Object.assign(record, { title: params[0], description: params[1], filename: params[2], original_filename: params[3], filepath: params[4] });
+          return [{ affectedRows: 1 }];
+        }
+        if (sql.startsWith("SELECT COUNT")) return [[{ count: 0 }]];
+        throw new Error(`Unexpected SQL: ${sql}`);
+      },
+      release() {},
+      destroy() {},
+    };
+    const post = await loadHandler(directory, async () => {}, undefined, connection);
+    const makeRequest = (replacement, expected = oldFilename) => {
+      const form = new FormData();
+      form.set("title", "New title");
+      form.set("description", "New description");
+      form.set("file", new File(["new video"], "CLIP.mp4", { type: "video/mp4" }));
+      if (replacement) {
+        form.set("replaceId", "4");
+        form.set("expectedFilename", expected);
+      }
+      return new Request("http://localhost/api/upload", { method: "POST", body: form });
+    };
+    assert.equal((await post(makeRequest(false))).status, 409);
+    assert.equal((await post(makeRequest(true, "outdated.mp4"))).status, 409);
+    assert.equal(await readFile(path.join(directory, record.filepath), "utf8"), "old video");
+    assert.deepEqual(await readdir(path.join(directory, "uploads")), [oldFilename]);
+
+    const response = await post(makeRequest(true));
+    assert.equal(response.status, 200);
+    assert.equal(record.title, "New title");
+    assert.equal(record.description, "New description");
+    assert.equal(await readFile(path.join(directory, record.filepath), "utf8"), "new video");
+    assert.deepEqual(await readdir(path.join(directory, "uploads")), [record.filename]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -2,28 +2,41 @@
 
 import { useEffect, useRef, useState } from "react";
 
+type Match = {
+  id: string;
+  title: string;
+  description: string | null;
+  filename: string;
+  original_filename: string | null;
+};
+
 export default function UploadPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "uploading" | "processing" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "checking" | "choosing" | "uploading" | "processing" | "success" | "error">("idle");
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [matches, setMatches] = useState<Match[]>([]);
   const activeRequest = useRef<XMLHttpRequest | null>(null);
-  const busy = status === "uploading" || status === "processing";
+  const activeCheck = useRef<AbortController | null>(null);
+  const busy = status === "checking" || status === "choosing" || status === "uploading" || status === "processing";
+  const uploading = status === "uploading" || status === "processing";
 
   useEffect(() => () => {
+    activeCheck.current?.abort();
+    activeCheck.current = null;
     const request = activeRequest.current;
     activeRequest.current = null;
     request?.abort();
   }, []);
 
-  function handleSubmit(
+  async function handleSubmit(
     e: React.FormEvent
   ) {
     e.preventDefault();
 
-    if (activeRequest.current) return;
+    if (activeRequest.current || activeCheck.current || busy) return;
     if (!file) {
       setStatus("error");
       setMessage("Please select a video file.");
@@ -35,11 +48,47 @@ export default function UploadPage() {
       return;
     }
 
+    const controller = new AbortController();
+    activeCheck.current = controller;
+    setStatus("checking");
+    setMessage("");
+    try {
+      const response = await fetch("/api/upload/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name }),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error("Unable to check for existing videos.");
+      const found: Match[] = await response.json();
+      if (controller.signal.aborted) return;
+      if (found.length) {
+        setMatches(found);
+        setStatus("choosing");
+      } else {
+        sendUpload();
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      console.error("Failed to check video filenames:", error);
+      setStatus("error");
+      setMessage("Unable to check for existing videos. Please try again.");
+    } finally {
+      if (activeCheck.current === controller) activeCheck.current = null;
+    }
+  }
+
+  function sendUpload(replacement?: Match) {
+    if (!file || activeRequest.current) return;
     const formData = new FormData();
 
     formData.append("title", title);
     formData.append("description", description);
     formData.append("file", file);
+    if (replacement) {
+      formData.append("replaceId", replacement.id);
+      formData.append("expectedFilename", replacement.filename);
+    }
 
     const request = new XMLHttpRequest();
     activeRequest.current = request;
@@ -65,7 +114,9 @@ export default function UploadPage() {
       if (request.status >= 200 && request.status < 300 && isResult &&
           "success" in result && result.success === true) {
         setStatus("success");
-        setMessage("Upload complete.");
+        const warning = "warning" in result && typeof result.warning === "string" ? ` ${result.warning}` : "";
+        setMessage(`${replacement ? "Video replaced." : "Upload complete."}${warning}`);
+        setMatches([]);
       } else {
         const errorMessage = request.status === 413
           ? "The video is too large for the server to accept. The maximum video size is 1 GB."
@@ -166,10 +217,44 @@ export default function UploadPage() {
           type="submit"
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
         >
-          {status === "processing" ? "Saving..." : busy ? "Uploading..." : "Upload Video"}
+          {status === "checking" ? "Checking..." : status === "processing" ? "Saving..." : uploading ? "Uploading..." : "Upload Video"}
         </button>
         </fieldset>
-        {busy && (
+        {status === "choosing" && (
+          <div className="space-y-3">
+            <p>A video with this filename may already exist. Choose the copy to replace, or cancel.</p>
+            {matches.map((match) => (
+              <div key={match.id} className="rounded border p-3">
+                <p className="font-semibold">{match.title}</p>
+                <p>Library ID: {match.id}</p>
+                {match.description && <p>{match.description}</p>}
+                <p className="break-all text-sm">
+                  {match.original_filename ?? match.filename.replace(/^[0-9a-f-]{36}-/i, "")}
+                  {!match.original_filename && " (older upload: possible match)"}
+                </p>
+                <video
+                  controls
+                  preload="none"
+                  src={`/api/library/${match.id}`}
+                  style={{ display: "block", width: "100%", maxWidth: "42rem", maxHeight: "50vh", objectFit: "contain" }}
+                />
+                <button
+                  type="button"
+                  className="mt-2 rounded bg-blue-600 px-4 py-2 text-white"
+                  onClick={() => {
+                    if (window.confirm(`Replace "${match.title}"? Its video and details will be overwritten.`)) sendUpload(match);
+                  }}
+                >
+                  Replace this video
+                </button>
+              </div>
+            ))}
+            <button type="button" className="rounded border px-4 py-2" onClick={() => { setMatches([]); setStatus("idle"); }}>
+              Cancel
+            </button>
+          </div>
+        )}
+        {uploading && (
           <div>
             <label htmlFor="upload-progress" className="block font-semibold mb-1">
               {status === "processing" ? "Saving video..." : "Uploading video..."}

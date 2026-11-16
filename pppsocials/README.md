@@ -35,6 +35,22 @@ ALTER TABLE videos MODIFY COLUMN filename VARCHAR(255) NOT NULL;
 Do not run this migration if the table already has a `filename` column. Resume
 uploads after deploying and restarting the app.
 
+For an existing table without `original_filename`, back up the database, stop
+uploads, and run the following once in aaPanel's database console before
+deploying this version:
+
+```sql
+ALTER TABLE videos ADD COLUMN original_filename VARCHAR(255) NULL;
+```
+
+Do not run it if the column already exists. New uploads retain their original
+filenames and check for matches without regard to capitalization. Older uploads
+only retain sanitized names, so they are shown as possible matches and require
+extra care when selecting a replacement. Replacement updates the title and
+description. The Library can delete an individual video after confirmation;
+deletion and replacement cannot be undone. Resume uploads after deploying and
+restarting the app.
+
 Videos can be up to 1 GB (1,000,000,000 bytes). Uploads are streamed to disk,
 and text fields are limited to 1 MiB. In the Nginx server configuration, allow
 enough space for the video and multipart form overhead:

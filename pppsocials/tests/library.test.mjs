@@ -10,19 +10,28 @@ import ts from "typescript";
 const require = createRequire(import.meta.url);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 
-async function loadHandler(route, directory, execute) {
+async function loadHandler(route, directory, execute, method = "GET", customConnection) {
+  const db = { execute, getConnection: async () => customConnection };
+  const helperSource = await readFile(path.join(testDir, "..", "src", "lib", "videos.ts"), "utf8");
+  const helperCompiled = ts.transpileModule(helperSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
+  }).outputText;
+  const helper = {};
+  const helperRequire = (name) => name === "@/src/lib/db" ? { db } : require(name);
+  new Function("require", "exports", "process", helperCompiled)(helperRequire, helper, { cwd: () => directory });
   const source = await readFile(path.join(testDir, "..", "app", "api", "library", route), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
   }).outputText;
   const exports = {};
   const mockRequire = (name) => {
-    if (name === "@/src/lib/db") return { db: { execute } };
+    if (name === "@/src/lib/db") return { db };
+    if (name === "@/src/lib/videos") return helper;
     if (name === "next/server") return { ...require(name), connection: async () => {} };
     return require(name);
   };
   new Function("require", "exports", "process", compiled)(mockRequire, exports, { cwd: () => directory });
-  return exports.GET;
+  return exports[method];
 }
 
 function request(range) {
@@ -30,6 +39,43 @@ function request(range) {
     headers: range ? { range } : {},
   });
 }
+
+test("deletes only the selected unchanged video and its unreferenced file", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "pppsocials-library-"));
+    try {
+      await mkdir(path.join(directory, "uploads"));
+      await writeFile(path.join(directory, "uploads", "clip.mp4"), "video");
+      let record = { filename: "clip.mp4", filepath: "uploads/clip.mp4" };
+      let references = 1;
+      const connection = {
+        async execute(sql) {
+          if (sql.startsWith("SELECT GET_LOCK")) return [[{ acquired: 1 }]];
+          if (sql.startsWith("SELECT RELEASE_LOCK")) return [[{ released: 1 }]];
+          if (sql.startsWith("SELECT filename")) return [record ? [record] : []];
+          if (sql.startsWith("DELETE")) { record = null; return [{ affectedRows: 1 }]; }
+          if (sql.startsWith("SELECT COUNT")) return [[{ count: references }]];
+          throw new Error(`Unexpected SQL: ${sql}`);
+        },
+        release() {},
+        destroy() {},
+      };
+      const remove = await loadHandler("[id]/route.ts", directory, async () => {}, "DELETE", connection);
+      const deletion = (filename) => new Request("http://localhost/api/library/1", {
+        method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ filename }),
+      });
+      assert.equal((await remove(deletion("stale.mp4"), context())).status, 409);
+      assert.equal(await readFile(path.join(directory, "uploads", "clip.mp4"), "utf8"), "video");
+      assert.equal((await remove(deletion("clip.mp4"), context())).status, 200);
+      assert.equal(record, null);
+      assert.equal(await readFile(path.join(directory, "uploads", "clip.mp4"), "utf8"), "video");
+      record = { filename: "clip.mp4", filepath: "uploads/clip.mp4" };
+      references = 0;
+      assert.equal((await remove(deletion("clip.mp4"), context())).status, 200);
+      await assert.rejects(readFile(path.join(directory, "uploads", "clip.mp4")), { code: "ENOENT" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+});
 
 function context(id = "1") {
   return { params: Promise.resolve({ id }) };
