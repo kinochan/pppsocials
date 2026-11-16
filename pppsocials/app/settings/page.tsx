@@ -7,7 +7,7 @@ type InstagramStatus =
   | { enabled: true; accounts: { id: string; username: string }[] | null };
 
 type FacebookStatus =
-  | { enabled: false }
+  | { enabled: true }
   | { enabled: true; pages: { id: string; name: string }[] | null };
 
 export default function SettingsPage() {
