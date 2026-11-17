@@ -1,4 +1,4 @@
-export async function readAuthInput(request: Request): Promise<Record<string, unknown> | null> {
+export async function readAuthInput(request: Request, maxBytes = 4096): Promise<Record<string, unknown> | null> {
   if (!request.body || !request.headers.get("content-type")?.startsWith("application/json")) return null;
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -8,7 +8,7 @@ export async function readAuthInput(request: Request): Promise<Record<string, un
       const { done, value } = await reader.read();
       if (done) break;
       length += value.length;
-      if (length > 4096) {
+      if (length > maxBytes) {
         await reader.cancel();
         return null;
       }

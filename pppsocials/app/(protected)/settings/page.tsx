@@ -167,8 +167,8 @@ export default function SettingsPage() {
       <section className="border rounded-lg p-4 bg-white shadow mt-6">
         <h2 className="text-xl font-semibold mb-3">YouTube Shorts</h2>
         <p className="mb-3">
-          Connect YouTube channels one at a time. This requests read-only access;
-          publishing Shorts will require additional permission later.
+          Connect YouTube channels one at a time. This requests access to identify
+          the channel and upload videos. Reconnect existing channels to grant upload access.
         </p>
         {youtubeResult && <p role="status" className="mb-3 text-green-700">{youtubeResult}</p>}
         {youtubeError && <p role="alert" className="mb-3 text-red-700">{youtubeError}</p>}

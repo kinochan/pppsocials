@@ -64,9 +64,9 @@ files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
 depends on the video format and codec supported by the browser. Instagram and
-Facebook Page Story publishing are available as described below; other publishing
-integrations are not implemented yet. The Library and video endpoints require an
-application login.
+Facebook Page Story publishing and YouTube uploads are available as described
+below; other publishing integrations are not implemented yet. The Library and
+video endpoints require an application login.
 
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
@@ -234,8 +234,8 @@ resolvable after 90 minutes.
 ## YouTube channels
 
 The YouTube connection stores multiple channels, authorized one at a time. It
-requests only the `youtube.readonly` scope; Shorts publishing is not implemented
-and will require additional authorization.
+requests `youtube.readonly` to identify the channel and `youtube.upload` to
+upload videos.
 
 Complete application login setup and block direct access to the Node.js port
 before enabling this feature. Administrators can add or reconnect channels.
@@ -252,9 +252,12 @@ before enabling this feature. Administrators can add or reconnect channels.
      the existing integrations, encoded as 64 hex characters. Back it up
      securely; changing it makes saved refresh tokens unreadable.
    - `YOUTUBE_CONNECTION_ENABLED=true`: set only after protecting the app.
-4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
-   YouTube channel** and authorize the intended channel. Repeat for each
-   channel; reconnecting one updates only that channel.
+4. Back up the database and apply `docs/youtube-publications.sql` once if the
+   `youtube_publications` table does not already exist. Deploy, rebuild, and
+   restart the Node app. In Settings, choose **Connect a YouTube channel** and
+   grant both permissions for the intended channel. Repeat for each channel;
+   reconnecting one updates only that channel. Channels connected before YouTube
+   uploading was added must be reconnected to grant upload access.
 
 Google may require OAuth verification, and an external app in testing must add
 the relevant Google accounts as test users. Testing-mode refresh tokens can
@@ -262,6 +265,35 @@ expire after seven days; revoked or expired tokens require reconnecting.
 Settings shows saved channels without checking whether their tokens still work.
 Do not log query strings or sensitive referrers for `/api/youtube/callback`;
 the callback contains a temporary authorization code.
+
+### Uploading YouTube Shorts
+
+Every signed-in user can open **Publish** on a Library video and select YouTube
+channels. The YouTube title and description are prefilled from the Library and
+can be edited for the upload; changes do not modify the Library. Choose public
+(the default), private, or unlisted, declare the audience and altered-content
+setting, certify compliance with YouTube's Community Guidelines, and confirm the
+upload. Uploads to different platforms are submitted separately.
+
+Install `ffprobe` (part of FFmpeg) on the app server and ensure it is available
+on the Node app's `PATH`. Before uploading, the app checks that the video is
+square or vertical and no longer than three minutes, including rotation metadata.
+The check requires exactly one non-cover-art video stream.
+If `ffprobe` is unavailable or cannot read the video, the upload is blocked.
+Videos are not converted. YouTube makes the final classification; see
+[YouTube's Shorts guidance](https://support.google.com/youtube/answer/15424877).
+
+Progress shows bytes acknowledged by YouTube. Once YouTube accepts the upload,
+the app shows the returned privacy setting if available; check YouTube Studio for
+the actual privacy and processing status, since YouTube or channel settings may
+change the requested privacy. Keep the app running during uploads. If the result
+is uncertain or the app stops, check YouTube Studio before resolving or retrying
+to avoid duplicates. Uncertain attempts can be resolved immediately; interrupted
+attempts become resolvable after 90 minutes.
+
+Before making the integration available to users, the operator must also review
+and meet [YouTube's API policies](https://developers.google.com/youtube/terms/developer-policies),
+including its terms, privacy policy, and data-deletion requirements.
 
 ## TikTok accounts
 

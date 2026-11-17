@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import YouTubePublish from "@/app/components/YouTubePublish";
 
 type Account = { id: string; username: string };
 type Publication = {
@@ -16,9 +17,11 @@ type Publication = {
 };
 type PublishingStatus = { enabled: boolean; accounts: Account[]; publications: Publication[] };
 
-export default function StoryPublish({ videoId, filename }: {
+export default function StoryPublish({ videoId, filename, title, description }: {
   videoId: string;
   filename: string;
+  title: string;
+  description: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -29,7 +32,8 @@ export default function StoryPublish({ videoId, filename }: {
       <div hidden={!open}>
         <PublishSection videoId={videoId} filename={filename} platform="instagram" open={open} />
         <PublishSection videoId={videoId} filename={filename} platform="facebook" open={open} />
-        <p className="mt-2 text-sm">TikTok and YouTube publishing are not available yet.</p>
+        <YouTubePublish videoId={videoId} filename={filename} originalTitle={title} originalDescription={description} open={open} />
+        <p className="mt-2 text-sm">TikTok publishing is not available yet.</p>
       </div>
     </div>
   );

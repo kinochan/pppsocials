@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { requireApiAccess } from "@/src/lib/access";
-import { youtubeConfig, youtubeReadonlyScope, youtubeStateCookie } from "@/src/lib/youtube";
+import { youtubeConfig, youtubeReadonlyScope, youtubeStateCookie, youtubeUploadScope } from "@/src/lib/youtube";
 
 export async function POST(request: Request) {
   const denied = await requireApiAccess(request, true);
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     url.searchParams.set("client_id", config.clientId);
     url.searchParams.set("redirect_uri", config.redirectUrl);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", youtubeReadonlyScope);
+    url.searchParams.set("scope", `${youtubeReadonlyScope} ${youtubeUploadScope}`);
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent select_account");
     url.searchParams.set("state", state);

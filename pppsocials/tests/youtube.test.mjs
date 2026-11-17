@@ -17,7 +17,7 @@ const env = {
   GOOGLE_CLIENT_SECRET: "client-secret",
   INSTAGRAM_TOKEN_KEY: "12".repeat(32),
 };
-const scope = "https://www.googleapis.com/auth/youtube.readonly";
+const scope = "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload";
 
 async function load(file, dependencies, fetchMock, variables = env) {
   const source = await readFile(path.join(root, file), "utf8");
@@ -126,6 +126,7 @@ test("does not save when Google omits offline access, permission, or a single ch
   for (const [token, channel] of [
     [{ access_token: "access", scope }, null],
     [{ access_token: "access", refresh_token: "refresh", scope: "other" }, null],
+    [{ access_token: "access", refresh_token: "refresh", scope: "https://www.googleapis.com/auth/youtube.readonly" }, null],
     [{ access_token: "access", refresh_token: "refresh", scope }, { items: [] }],
     [{ access_token: "access", refresh_token: "refresh", scope }, { items: [
       { id: "one", snippet: { title: "One" } },
@@ -144,5 +145,38 @@ test("does not save when Google omits offline access, permission, or a single ch
     const result = await callback.GET(callbackRequest(state, cookie));
     assert.equal(new URL(result.headers.get("location")).searchParams.get("youtube"), "failed");
     assert.equal(writes, 0);
+  }
+});
+
+test("refreshes the saved channel token and verifies the authorized channel", async () => {
+  const calls = [];
+  const { lib, crypto } = await setup(async (url, options) => {
+    calls.push({ url, options });
+    if (calls.length === 1) return Response.json({ access_token: "new-access", scope });
+    return Response.json({ items: [{ id: "channel-1" }] });
+  }, async () => [[{
+    encrypted_refresh_token: crypto.encryptMetaSecret("refresh-secret", Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex")),
+  }]]);
+  assert.equal(await lib.youtubePublishingToken("channel-1", lib.youtubeConfig()), "new-access");
+  assert.equal(calls[0].options.body.get("refresh_token"), "refresh-secret");
+  assert.equal(calls[1].options.headers.Authorization, "Bearer new-access");
+  assert.ok(calls.every(({ url }) => !url.includes("refresh-secret") && !url.includes("new-access")));
+});
+
+test("rejects old read-only grants and a token for the wrong channel", async () => {
+  for (const [grantedScope, channelId] of [
+    ["https://www.googleapis.com/auth/youtube.readonly", "channel-1"],
+    [scope, "different-channel"],
+  ]) {
+    let calls = 0;
+    const { lib, crypto } = await setup(async () => {
+      calls++;
+      return Response.json(calls === 1
+        ? { access_token: "new-access", scope: grantedScope }
+        : { items: [{ id: channelId }] });
+    }, async () => [[{
+      encrypted_refresh_token: crypto.encryptMetaSecret("refresh-secret", Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex")),
+    }]]);
+    await assert.rejects(() => lib.youtubePublishingToken("channel-1", lib.youtubeConfig()), /Reconnect|channel changed/);
   }
 });
