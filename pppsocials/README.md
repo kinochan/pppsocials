@@ -63,9 +63,10 @@ the new file is removed when possible and the upload reports an error. Existing
 files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
-depends on the video format and codec supported by the browser. Publishing and
-post descriptions are not implemented yet. The Library and video endpoints
-require an application login.
+depends on the video format and codec supported by the browser. Instagram Reel
+publishing is available as described below; other publishing integrations are
+not implemented yet. The Library and video endpoints require an application
+login.
 
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
@@ -112,7 +113,7 @@ is writable and has enough free disk space.
 ## Instagram connection
 
 The Instagram connection uses Meta's Instagram API with Unified Login and stores
-one shared business connection for the app. It does not publish videos yet.
+one shared business connection for the app.
 
 The connections are disabled by default. Complete application login setup before
 enabling them, and restrict direct access to the Node.js port. Only application
@@ -146,7 +147,29 @@ any other proxy or monitoring system not to log query strings for
 `/api/instagram/callback`. Tokens are encrypted before storage and are not
 returned to the browser. Do not share screenshots containing tokens or secrets.
 Meta app review and appropriate access levels may be needed for users without
-app roles. Webhooks and Instagram publishing are not implemented yet.
+app roles. Webhooks are not implemented.
+
+### Publishing Instagram Reels
+
+Back up the database, then apply `docs/instagram-publications.sql` once before
+deploying this version. Configure the Unified Login permissions to include
+`instagram_content_publish`, and reconnect the Instagram account if necessary
+to grant it. Meta access levels, app review, or Page publishing authorization
+may also be required.
+
+Every signed-in user can select a Library video, choose connected Instagram
+accounts, edit the caption, and confirm public Reel publishing. The app streams
+the video directly to Meta; it does not make the Library publicly accessible.
+Check Meta's video specifications before uploading; videos are not converted.
+The Library records each account's progress and refreshes it while open.
+
+The app must remain running during uploads and processing. If the server stops,
+the request is interrupted, or the final Meta response is lost, the result may
+be uncertain. Check the Instagram account before resolving an uncertain or
+stalled attempt and trying again: otherwise a duplicate may be published.
+Uncertain attempts can be resolved immediately; interrupted attempts become
+resolvable after 90 minutes. Meta may take additional time to show a published
+Reel. A webhook is not used for this publishing flow.
 
 ## Facebook Page connection
 

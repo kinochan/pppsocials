@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import InstagramPublish from "@/app/components/InstagramPublish";
 
 type Video = {
   id: string;
@@ -91,6 +92,7 @@ export default function LibraryPage() {
               {failedVideos.includes(video.id) && (
                 <p role="alert">Unable to play this video. The file may be missing or unsupported by your browser.</p>
               )}
+              <InstagramPublish videoId={video.id} filename={video.filename} description={video.description} />
               <button
                 type="button"
                 disabled={deleting !== null}

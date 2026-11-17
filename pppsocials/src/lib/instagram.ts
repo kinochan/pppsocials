@@ -1,6 +1,6 @@
 import type { RowDataPacket } from "mysql2";
 import { db } from "@/src/lib/db";
-import { encryptMetaSecret } from "@/src/lib/meta-crypto";
+import { decryptMetaSecret, encryptMetaSecret } from "@/src/lib/meta-crypto";
 
 const graphUrl = "https://graph.facebook.com/v27.0";
 export const stateCookie = "__Host-instagram-oauth-state";
@@ -135,16 +135,34 @@ interface ConnectionRow extends RowDataPacket {
   accounts: string;
 }
 
-export async function savedInstagramAccounts(): Promise<InstagramAccount[] | null> {
-  const [rows] = await db.execute<ConnectionRow[]>(
-    "SELECT accounts FROM instagram_connection WHERE id = 1"
-  );
-  if (rows.length === 0) return null;
-  const accounts: unknown = JSON.parse(rows[0].accounts);
+function parseAccounts(value: string): InstagramAccount[] {
+  const accounts: unknown = JSON.parse(value);
   if (!Array.isArray(accounts) || !accounts.every(
     (account) => isRecord(account) && typeof account.id === "string" && typeof account.username === "string"
   )) {
     throw new Error("Stored Instagram account data is invalid.");
   }
   return accounts;
+}
+
+export async function savedInstagramAccounts(): Promise<InstagramAccount[] | null> {
+  const [rows] = await db.execute<ConnectionRow[]>(
+    "SELECT accounts FROM instagram_connection WHERE id = 1"
+  );
+  return rows.length === 0 ? null : parseAccounts(rows[0].accounts);
+}
+
+interface PublishingConnectionRow extends ConnectionRow {
+  encrypted_token: string;
+}
+
+export async function instagramPublishingConnection(key: Buffer) {
+  const [rows] = await db.execute<PublishingConnectionRow[]>(
+    "SELECT accounts, encrypted_token FROM instagram_connection WHERE id = 1"
+  );
+  if (!rows.length) return null;
+  return {
+    accounts: parseAccounts(rows[0].accounts),
+    token: decryptMetaSecret(rows[0].encrypted_token, key),
+  };
 }

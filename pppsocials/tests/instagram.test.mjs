@@ -113,11 +113,25 @@ test("identifies which Meta request failed without exposing credentials", async 
       if (count === failureAt) return new Response("private-token", { status: 400 });
       return Response.json(count === 1 ? { access_token: "private-token" } : { client_business_id: "business" });
     });
+
     await assert.rejects(
       lib.connectInstagram("private-code", lib.instagramConfig()),
       (error) => error.message === `Meta ${operation} request failed with HTTP 400.`
     );
   }
+});
+
+test("loads the selected account list and encrypted token together for publishing", async () => {
+  const crypto = await load("src/lib/meta-crypto.ts", {}, undefined);
+  const key = Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex");
+  const encrypted = crypto.encryptMetaSecret("private-token", key);
+  const { lib } = await setup(undefined, async (sql) => {
+    assert.match(sql, /SELECT accounts, encrypted_token/);
+    return [[{ accounts: JSON.stringify([{ id: "123", username: "test" }]), encrypted_token: encrypted }]];
+  });
+  assert.deepEqual(await lib.instagramPublishingConnection(key), {
+    accounts: [{ id: "123", username: "test" }], token: "private-token",
+  });
 });
 
 test("rejects invalid OAuth state before contacting Meta", async () => {
