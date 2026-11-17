@@ -3,6 +3,7 @@ import { open } from "fs/promises";
 import type { ResultSetHeader } from "mysql2";
 import { db } from "@/src/lib/db";
 import { uploadFilePath } from "@/src/lib/videos";
+import { metaJson, PublishError, uploadMetaVideo } from "@/src/lib/meta-publish";
 
 type PublishInput = {
   id: string;
@@ -10,20 +11,6 @@ type PublishInput = {
   filepath: string;
   token: string;
 };
-
-class PublishError extends Error {}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-async function metaJson(url: string, options: RequestInit): Promise<Record<string, unknown>> {
-  const response = await fetch(url, { ...options, cache: "no-store", redirect: "error" });
-  if (!response.ok) throw new PublishError(`Meta returned HTTP ${response.status}.`);
-  const data: unknown = await response.json();
-  if (!isRecord(data) || data.error) throw new PublishError("Meta returned an invalid response.");
-  return data;
-}
 
 async function transition(id: string, from: string, to: string, containerId?: string) {
   const [result] = await db.execute<ResultSetHeader>(
@@ -69,56 +56,9 @@ export async function publishInstagramStory(input: PublishInput) {
     const containerId = created.id;
     if (!await transition(input.id, "uploading", "uploading", containerId)) return;
 
-    const stream = file.createReadStream({ autoClose: false });
-    try {
-      const iterator = stream[Symbol.asyncIterator]();
-      let bytesRead = 0;
-      let lastPercent = 0;
-      const body = new ReadableStream<Uint8Array>({
-        async pull(controller) {
-          try {
-            const result = await iterator.next();
-            if (result.done) {
-              controller.close();
-              return;
-            }
-            bytesRead += result.value.byteLength;
-            const percent = Math.min(99, Math.floor(bytesRead * 100 / stats.size));
-            if (percent >= lastPercent + 5) {
-              await updateUploadProgress(input.id, percent);
-              lastPercent = percent;
-            }
-            controller.enqueue(result.value);
-          } catch (error) {
-            controller.error(error);
-          }
-        },
-        cancel() {
-          stream.destroy();
-        },
-      });
-      const options = {
-        method: "POST",
-        headers: {
-          Authorization: `OAuth ${input.token}`,
-          offset: "0",
-          file_size: String(stats.size),
-          "Content-Length": String(stats.size),
-          "Content-Type": "application/octet-stream",
-        },
-        body,
-        duplex: "half" as const,
-        signal: AbortSignal.timeout(45 * 60 * 1000),
-      };
-      const uploaded = await metaJson(
-        `https://rupload.facebook.com/ig-api-upload/v27.0/${containerId}`, options
-      );
-      if (uploaded.success !== true) throw new PublishError("Meta did not confirm the upload.");
-      if (bytesRead !== stats.size) throw new PublishError("Meta confirmed an incomplete upload.");
-      await updateUploadProgress(input.id, 100);
-    } finally {
-      stream.destroy();
-    }
+    await uploadMetaVideo(file, stats.size,
+      `https://rupload.facebook.com/ig-api-upload/v27.0/${containerId}`,
+      input.token, (percent) => updateUploadProgress(input.id, percent));
 
     if (!await transition(input.id, "uploading", "processing")) return;
     stage = "processing";

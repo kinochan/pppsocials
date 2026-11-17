@@ -56,9 +56,11 @@ async function runPublish(fetchMock, initialStatus = "queued", allowTransition =
     return [{ affectedRows: 1 }];
   };
   try {
+    const metaPublish = await load("src/lib/meta-publish.ts", {}, fetchMock);
     const lib = await load("src/lib/instagram-publish.ts", {
       "@/src/lib/db": { db: { execute } },
       "@/src/lib/videos": { uploadFilePath: () => file },
+      "@/src/lib/meta-publish": metaPublish,
     }, fetchMock);
     await lib.publishInstagramStory({
       id: "job-id", accountId: "123", filepath: "uploads/clip.mp4", token: "secret-token",
@@ -147,12 +149,18 @@ test("rejects Story files over the 100 MB limit before contacting Meta", async (
     let status = "queued";
     let message;
     let calls = 0;
+    const fetchMock = async () => {
+      calls++;
+      throw new Error("Stop before uploading");
+    };
+    const metaPublish = await load("src/lib/meta-publish.ts", {}, fetchMock);
     const lib = await load("src/lib/instagram-publish.ts", {
       "fs/promises": { open: async () => ({
         stat: async () => ({ size, isFile: () => true }),
         close: async () => {},
       }) },
       "@/src/lib/videos": { uploadFilePath: () => "unused" },
+      "@/src/lib/meta-publish": metaPublish,
       "@/src/lib/db": { db: { execute: async (sql, params) => {
         if (sql.includes("SET status = ?, container_id")) {
           status = params[0];
@@ -162,10 +170,7 @@ test("rejects Story files over the 100 MB limit before contacting Meta", async (
         }
         return [{ affectedRows: 1 }];
       } } },
-    }, async () => {
-      calls++;
-      throw new Error("Stop before uploading");
-    });
+    }, fetchMock);
     await lib.publishInstagramStory({
       id: "job-id", accountId: "123", filepath: "uploads/clip.mp4", token: "secret-token",
     });

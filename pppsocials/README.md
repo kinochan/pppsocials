@@ -63,10 +63,10 @@ the new file is removed when possible and the upload reports an error. Existing
 files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
-depends on the video format and codec supported by the browser. Instagram Story
-publishing is available as described below; other publishing integrations are
-not implemented yet. The Library and video endpoints require an application
-login.
+depends on the video format and codec supported by the browser. Instagram and
+Facebook Page Story publishing are available as described below; other publishing
+integrations are not implemented yet. The Library and video endpoints require an
+application login.
 
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
@@ -198,7 +198,34 @@ blocking direct access to the Node.js port. The connection shares `APP_URL`,
 Use **Connect Facebook Pages** in Settings to grant access. Reconnecting
 replaces the saved Pages. Page tokens are encrypted on the server and never
 sent to the browser. App Review, Page permissions, and Page publishing
-authorization may be required. This connection does not publish Stories yet.
+authorization may be required.
+
+### Publishing Facebook Page Stories
+
+Back up the database, then apply `docs/facebook-publications.sql` once to the
+app database before deploying this version. Do not rerun it if the table already
+exists. Rebuild and restart the app after deployment.
+
+The Facebook Login for Business configuration must grant `pages_manage_posts`,
+`pages_read_engagement`, and `pages_show_list`; the Page must grant the user
+`CREATE_CONTENT`. Reconnect the Pages if new permissions need to be granted.
+App Review and Page publishing authorization may also be needed.
+
+Every signed-in user can open **Publish** on a Library video, choose connected
+Facebook Pages, and confirm a Story for those Pages. Instagram and Facebook
+are submitted separately. The Library description is not added as text.
+The video is streamed directly to Meta, without making the Library public. Meta
+requires videos of at least 3 seconds and states that video Stories cannot exceed
+60 seconds, with additional [format requirements](https://developers.facebook.com/docs/page-stories-api/).
+The app does not check duration or convert videos.
+
+Upload progress measures bytes read for transfer; 100% appears only after Meta
+confirms the upload. A successful finish response is recorded as published,
+although Meta may take additional time to process or display the Story. Keep the
+app running during publishing. If a final response is lost or the app stops,
+check the Facebook Page before resolving or retrying, to avoid duplicates.
+Uncertain attempts can be resolved immediately; interrupted attempts become
+resolvable after 90 minutes.
 
 ## YouTube channels
 
