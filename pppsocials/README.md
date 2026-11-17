@@ -110,6 +110,10 @@ Check for a lower limit in any `/api/upload` location or upstream proxy, then
 test the Nginx configuration and reload it. Ensure the app's `uploads` directory
 is writable and has enough free disk space.
 
+The upload endpoint is excluded from Next.js Proxy so large uploads are streamed
+without Proxy's request-body buffering limit. The upload route itself enforces
+the application login and same-origin checks.
+
 ## Instagram connection
 
 The Instagram connection uses Meta's Instagram API with Unified Login and stores

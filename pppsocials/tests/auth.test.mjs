@@ -17,14 +17,14 @@ const env = {
   AUTH_SETUP_SECRET: setupSecret,
 };
 
-async function load(file, dependencies) {
+async function load(file, dependencies, fetchMock = globalThis.fetch) {
   const source = await readFile(path.join(root, file), "utf8");
   const compiled = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const exports = {};
   const mockRequire = (name) => name in dependencies ? dependencies[name] : require(name);
-  new Function("require", "exports", "process", compiled)(mockRequire, exports, { env });
+  new Function("require", "exports", "process", "fetch", compiled)(mockRequire, exports, { env }, fetchMock);
   return exports;
 }
 
@@ -38,6 +38,28 @@ function request(pathname, body, cookie, requestOrigin = origin) {
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
 }
+
+test("sign-out sends the JSON request expected by the authentication endpoint", async () => {
+  const calls = [];
+  const navigation = [];
+  const component = await load("app/components/SignOut.tsx", {
+    react: { useState: () => ["", () => {}] },
+    "next/navigation": { useRouter: () => ({
+      replace: (url) => navigation.push(url),
+      refresh: () => navigation.push("refresh"),
+    }) },
+  }, async (url, options) => {
+    calls.push({ url, options });
+    return new Response(null, { status: 200 });
+  });
+  const element = component.default();
+  await element.props.children[0].props.onClick();
+  assert.equal(calls[0].url, "/api/auth/sign-out");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers["Content-Type"], "application/json");
+  assert.deepEqual(JSON.parse(calls[0].options.body), {});
+  assert.deepEqual(navigation, ["/login", "refresh"]);
+});
 
 test("bootstrap, login, roles, reset, disabling and logout enforce access", async (t) => {
   const [major, minor] = process.versions.node.split(".").map(Number);
