@@ -37,14 +37,14 @@ async function apiRequest(endpoint: string, token: string, body: object) {
 function safeUploadUrl(value: unknown) {
   if (typeof value !== "string") {
     console.error("TikTok upload URL rejected:", { url: "missing-or-not-a-string" });
-    throw new TikTokUploadError("TikTok did not return an upload URL.");
+    throw new TikTokUploadError("TikTok did not return an upload URL (missing or invalid type).");
   }
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     console.error("TikTok upload URL rejected:", { url: "unparseable" });
-    throw new TikTokUploadError("TikTok returned an invalid upload URL.");
+    throw new TikTokUploadError("TikTok returned an invalid upload URL (unparseable).");
   }
   if (url.protocol !== "https:" || !["open-upload.tiktokapis.com", "upload.us.tiktokapis.com"].includes(url.hostname) ||
       url.port || url.username || url.password || url.hash || !["/video/", "/upload/"].includes(url.pathname) ||
@@ -54,7 +54,7 @@ function safeUploadUrl(value: unknown) {
       const values = url.searchParams.getAll(name);
       return values.length === 0 ? "missing" : values.length === 1 && values[0] ? "present" : "invalid";
     };
-    console.error("TikTok upload URL rejected:", {
+    const diagnostic = {
       https: url.protocol === "https:",
       host: ["open-upload.tiktokapis.com", "upload.us.tiktokapis.com"].includes(url.hostname)
         ? "documented" : url.hostname.endsWith(".tiktokapis.com") ? "other-tiktokapis-subdomain" : "other",
@@ -64,8 +64,9 @@ function safeUploadUrl(value: unknown) {
       hasPort: !!url.port,
       hasCredentials: !!(url.username || url.password),
       hasFragment: !!url.hash,
-    });
-    throw new TikTokUploadError("TikTok returned an invalid upload URL.");
+    };
+    console.error("TikTok upload URL rejected:", diagnostic);
+    throw new TikTokUploadError(`TikTok returned an invalid upload URL: ${JSON.stringify(diagnostic)}`);
   }
   return url.toString();
 }

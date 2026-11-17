@@ -31,6 +31,7 @@ async function runUpload(fetchMock, size = 10) {
   let status = "queued";
   let active = 1;
   let publishId = null;
+  let message = null;
   const progress = [];
   const db = { execute: async (sql, params) => {
     if (sql.includes("status = 'uploading'") && sql.includes("status = 'queued'")) {
@@ -49,7 +50,7 @@ async function runUpload(fetchMock, size = 10) {
       status = "processing";
       return [{ affectedRows: 1 }];
     }
-    [status, active] = params;
+    [status, active, message] = params;
     return [{ affectedRows: 1 }];
   } };
   class TikTokConnectionError extends Error {}
@@ -60,7 +61,7 @@ async function runUpload(fetchMock, size = 10) {
       "@/src/lib/videos": { uploadFilePath: () => filepath },
     }, fetchMock);
     await lib.uploadTikTokDraft({ id: "job", accountId: "account", filepath: "uploads/clip.mp4" });
-    return { status, active, publishId, progress };
+    return { status, active, publishId, progress, message };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -111,6 +112,9 @@ test("reports only safe URL shape when TikTok returns an unexpected upload URL",
       upload_url: "https://regional.tiktokapis.com/secret-path?upload_id=private-id&upload_token=private-token",
     }));
     assert.equal(result.status, "failed");
+    assert.match(result.message, /"host":"other-tiktokapis-subdomain"/);
+    assert.doesNotMatch(result.message, /private-id|private-token|secret-path/);
+    assert.ok(result.message.length <= 255);
   } finally {
     console.error = original;
   }
