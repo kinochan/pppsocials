@@ -64,9 +64,9 @@ files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
 depends on the video format and codec supported by the browser. Instagram and
-Facebook Page Story publishing and YouTube uploads are available as described
-below; other publishing integrations are not implemented yet. The Library and
-video endpoints require an application login.
+Facebook Page Story publishing, YouTube uploads, and TikTok inbox uploads are
+available as described below. The Library and video endpoints require an
+application login.
 
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
@@ -298,8 +298,8 @@ including its terms, privacy policy, and data-deletion requirements.
 ## TikTok accounts
 
 The TikTok connection stores multiple accounts, authorized one at a time using
-Login Kit's `user.info.basic` scope. It does not publish videos; posting requires
-additional TikTok permissions, review, and implementation.
+Login Kit's `user.info.basic` scope. The optional inbox upload also requests
+`video.upload`; it does not post videos directly.
 
 Complete application login setup and block direct access to the Node.js port
 before enabling this feature. Administrators can add or reconnect accounts.
@@ -308,6 +308,8 @@ before enabling this feature. Administrators can add or reconnect accounts.
 2. Create an app at [TikTok for Developers](https://developers.tiktok.com/),
    add **Login Kit** for web, and register the exact redirect URI
    `<APP_URL>/api/tiktok/callback`. Configure the `user.info.basic` scope.
+   For inbox uploads, add the Content Posting API and obtain approval for
+   `video.upload`. Confirm with TikTok that your intended app use is eligible.
 3. Configure these server-side environment variables (never commit or share
    the client secret):
    - `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`: the selected TikTok app's credentials.
@@ -316,17 +318,43 @@ before enabling this feature. Administrators can add or reconnect accounts.
      existing integrations. Back it up securely; changing it makes saved
      tokens unreadable.
    - `TIKTOK_CONNECTION_ENABLED=true`: set only after protecting the app.
+   - `TIKTOK_UPLOAD_ENABLED=true`: set only after TikTok approves `video.upload`
+     and the upload table below has been created. Leave unset for basic access.
 4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
    TikTok account** and authorize the intended account. Repeat for each account;
    reconnecting one updates only that account. Switch TikTok accounts if needed.
 
 TikTok offers [sandbox testing](https://developers.tiktok.com/doc/add-a-sandbox/)
 with separate sandbox credentials and target users. Production access requires
-TikTok review. The stored access and refresh tokens are encrypted; this app does
-not yet refresh them automatically. Expired or revoked connections require
+TikTok review. The stored access and refresh tokens are encrypted and refreshed
+when needed for uploads; expired refresh tokens or revoked access require
 reconnecting. Settings shows saved accounts without checking token validity.
 Do not log query strings or sensitive referrers for `/api/tiktok/callback`;
 the callback contains a temporary authorization code.
+
+### Sending videos to the TikTok inbox
+
+Back up the database and apply `docs/tiktok-uploads.sql` once. Enable
+`TIKTOK_UPLOAD_ENABLED`, deploy, rebuild, and restart the app. Reconnect each
+TikTok account in Settings and grant the requested upload permission.
+
+In the Library, choose **Publish**, select TikTok accounts, and confirm **Send to
+TikTok inbox**. TikTok sends an inbox notification; open it in TikTok to edit the
+video, enter a caption, choose privacy, and publish. The Library title and
+description are not sent. Use **Check TikTok status** to check delivery;
+delivery does not mean the video has been published.
+
+The app sends MP4, MOV, and WebM files without conversion. TikTok also imposes
+[codec, duration, frame rate, and size limits](https://developers.tiktok.com/docs/en/content-posting-api-media-transfer-guide).
+TikTok limits pending inbox shares. Keep the app running during transfer.
+If an upload is interrupted or its result is uncertain, check its status and
+the TikTok inbox before resolving or retrying to avoid duplicate shares.
+Interrupted attempts can be resolved after 90 minutes.
+
+TikTok's [Direct Post guidelines](https://developers.tiktok.com/docs/en/content-sharing-guidelines)
+exclude private utilities for a team's own accounts. This integration uses the
+separate Upload API, not Direct Post; confirm its eligibility and any applicable
+terms with TikTok before deployment.
 
 ## Getting Started
 

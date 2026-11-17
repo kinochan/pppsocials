@@ -16,7 +16,7 @@ type YouTubeStatus =
 
 type TikTokStatus =
   | { enabled: false }
-  | { enabled: true; accounts: { id: string; displayName: string }[] };
+  | { enabled: true; uploadEnabled: boolean; accounts: { id: string; displayName: string }[] };
 
 export default function SettingsPage() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
@@ -137,8 +137,10 @@ export default function SettingsPage() {
       <section className="border rounded-lg p-4 bg-white shadow mt-6">
         <h2 className="text-xl font-semibold mb-3">TikTok</h2>
         <p className="mb-3">
-          Connect TikTok accounts one at a time using basic account access.
-          Posting videos will require additional permission later.
+          Connect TikTok accounts one at a time.
+          {tiktokStatus?.enabled && tiktokStatus.uploadEnabled
+            ? " Grant video upload access and reconnect existing accounts to send videos to TikTok's inbox."
+            : " Video uploads require additional configuration and permission."}
         </p>
         {tiktokResult && <p role="status" className="mb-3 text-green-700">{tiktokResult}</p>}
         {tiktokError && <p role="alert" className="mb-3 text-red-700">{tiktokError}</p>}

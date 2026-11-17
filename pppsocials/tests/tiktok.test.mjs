@@ -11,6 +11,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { NextRequest } = require("next/server");
 const env = {
   TIKTOK_CONNECTION_ENABLED: "true",
+  TIKTOK_UPLOAD_ENABLED: "true",
   APP_URL: "https://example.test",
   TIKTOK_CLIENT_KEY: "client-key",
   TIKTOK_CLIENT_SECRET: "client-secret",
@@ -51,7 +52,7 @@ function token(id) {
     access_token: `access-${id}`,
     refresh_token: `refresh-${id}`,
     open_id: id,
-    scope: "user.info.basic",
+    scope: "user.info.basic,video.upload",
     expires_in: 7200,
     refresh_expires_in: 15552000,
   };
@@ -91,7 +92,7 @@ test("connects multiple accounts and encrypts their tokens and expiry times", as
     const login = new URL(response.headers.get("location"));
     const state = login.searchParams.get("state");
     assert.equal(login.origin, "https://www.tiktok.com");
-    assert.equal(login.searchParams.get("scope"), "user.info.basic");
+    assert.equal(login.searchParams.get("scope"), "user.info.basic,video.upload");
     assert.equal(login.searchParams.get("disable_auto_auth"), "1");
     assert.match(response.headers.get("set-cookie"), /HttpOnly.*Secure|Secure.*HttpOnly/i);
 
@@ -109,11 +110,11 @@ test("connects multiple accounts and encrypts their tokens and expiry times", as
   const secrets = JSON.parse(crypto.decryptMetaSecret(encrypted, Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex")));
   assert.equal(secrets.accessToken, "access-first");
   assert.equal(secrets.refreshToken, "refresh-first");
-  assert.equal(secrets.scope, "user.info.basic");
+  assert.equal(secrets.scope, "user.info.basic,video.upload");
   assert.ok(secrets.refreshExpiresAt > secrets.accessExpiresAt && secrets.accessExpiresAt > Date.now());
   const statusResponse = await status.GET();
   assert.deepEqual(await statusResponse.json(), {
-    enabled: true,
+    enabled: true, uploadEnabled: true,
     accounts: [{ id: "first", displayName: "Account first" }, { id: "second", displayName: "Account second" }],
   });
   assert.equal(statusResponse.headers.get("cache-control"), "no-store");
@@ -134,6 +135,7 @@ test("rejects cross-origin starts and invalid OAuth state before contacting TikT
 test("does not save missing permissions, invalid tokens, or mismatched accounts", async () => {
   for (const [tokenResponse, account] of [
     [{ ...token("first"), scope: "other" }, null],
+    [{ ...token("first"), scope: "user.info.basic" }, null],
     [{ ...token("first"), refresh_token: "" }, null],
     [{ ...token("first"), refresh_expires_in: 0 }, null],
     [token("first"), { data: { user: { open_id: "other", display_name: "Other" } }, error: { code: "ok" } }],
@@ -166,4 +168,82 @@ test("reports provider and database failures without exposing tokens", async () 
       : "Could not save the TikTok connection in the database.";
     await assert.rejects(lib.connectTikTok("code", lib.tiktokConfig()), (error) => error.message === expected);
   }
+});
+
+test("refreshes and persists rotated tokens while holding the account row lock", async () => {
+  const crypto = await load("src/lib/meta-crypto.ts", {}, null);
+  const key = Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex");
+  let encrypted = crypto.encryptMetaSecret(JSON.stringify({
+    accessToken: "old-access", refreshToken: "old-refresh", scope: "user.info.basic,video.upload",
+    accessExpiresAt: Date.now() - 1, refreshExpiresAt: Date.now() + 100000,
+  }), key);
+  const operations = [];
+  const connection = {
+    beginTransaction: async () => operations.push("begin"),
+    execute: async (sql, params) => {
+      if (sql.startsWith("SELECT")) {
+        assert.match(sql, /FOR UPDATE/);
+        operations.push("lock");
+        return [[{ encrypted_tokens: encrypted }]];
+      }
+      operations.push("save");
+      encrypted = params[0];
+      return [{ affectedRows: 1 }];
+    },
+    commit: async () => operations.push("commit"),
+    rollback: async () => operations.push("rollback"),
+    release: () => operations.push("release"),
+  };
+  let calls = 0;
+  const lib = await load("src/lib/tiktok.ts", {
+    "@/src/lib/db": { db: { getConnection: async () => connection } },
+    "@/src/lib/meta-crypto": crypto,
+  }, async (_url, options) => {
+    calls++;
+    assert.equal(options.body.get("refresh_token"), "old-refresh");
+    return Response.json({ ...token("first"), access_token: "new-access", refresh_token: "new-refresh" });
+  });
+  assert.equal(await lib.tiktokUploadToken("first", lib.tiktokConfig()), "new-access");
+  assert.deepEqual(operations, ["begin", "lock", "save", "commit", "release"]);
+  const stored = JSON.parse(crypto.decryptMetaSecret(encrypted, key));
+  assert.equal(stored.refreshToken, "new-refresh");
+  assert.equal(await lib.tiktokUploadToken("first", lib.tiktokConfig()), "new-access");
+  assert.equal(calls, 1);
+});
+
+test("requires old basic-only connections to be reauthorized before upload", async () => {
+  const crypto = await load("src/lib/meta-crypto.ts", {}, null);
+  const key = Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex");
+  const encrypted = crypto.encryptMetaSecret(JSON.stringify({
+    accessToken: "access", refreshToken: "refresh", scope: "user.info.basic",
+    accessExpiresAt: Date.now() + 100000, refreshExpiresAt: Date.now() + 100000,
+  }), key);
+  const connection = {
+    beginTransaction: async () => {},
+    execute: async () => [[{ encrypted_tokens: encrypted }]],
+    rollback: async () => {},
+    release: () => {},
+  };
+  const lib = await load("src/lib/tiktok.ts", {
+    "@/src/lib/db": { db: { getConnection: async () => connection } },
+    "@/src/lib/meta-crypto": crypto,
+  }, async () => { throw new Error("Should not contact TikTok"); });
+  await assert.rejects(() => lib.tiktokUploadToken("first", lib.tiktokConfig()), /Reconnect.*upload permission/);
+});
+
+test("keeps basic-only authorization available when inbox uploads are disabled", async () => {
+  const variables = { ...env, TIKTOK_UPLOAD_ENABLED: "false" };
+  const crypto = await load("src/lib/meta-crypto.ts", {}, null, variables);
+  let saved = false;
+  const lib = await load("src/lib/tiktok.ts", {
+    "@/src/lib/db": { db: { execute: async () => { saved = true; } } },
+    "@/src/lib/meta-crypto": crypto,
+  }, async (url) => url.includes("/oauth/token/")
+    ? Response.json({ ...token("first"), scope: "user.info.basic" })
+    : Response.json({ data: { user: { open_id: "first", display_name: "Account" } }, error: { code: "ok" } }), variables);
+  const connect = await load("app/api/tiktok/connect/route.ts", { "@/src/lib/tiktok": lib }, null, variables);
+  const response = await start(connect);
+  assert.equal(new URL(response.headers.get("location")).searchParams.get("scope"), "user.info.basic");
+  await lib.connectTikTok("code", lib.tiktokConfig());
+  assert.equal(saved, true);
 });

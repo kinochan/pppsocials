@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import YouTubePublish from "@/app/components/YouTubePublish";
+import TikTokUpload from "@/app/components/TikTokUpload";
 
 type Account = { id: string; username: string };
 type Publication = {
@@ -33,7 +34,7 @@ export default function StoryPublish({ videoId, filename, title, description }: 
         <PublishSection videoId={videoId} filename={filename} platform="instagram" open={open} />
         <PublishSection videoId={videoId} filename={filename} platform="facebook" open={open} />
         <YouTubePublish videoId={videoId} filename={filename} originalTitle={title} originalDescription={description} open={open} />
-        <p className="mt-2 text-sm">TikTok publishing is not available yet.</p>
+        <TikTokUpload videoId={videoId} filename={filename} open={open} />
       </div>
     </div>
   );
