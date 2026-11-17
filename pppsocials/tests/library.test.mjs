@@ -25,6 +25,7 @@ async function loadHandler(route, directory, execute, method = "GET", customConn
   }).outputText;
   const exports = {};
   const mockRequire = (name) => {
+    if (name === "@/src/lib/access") return { requireApiAccess: async () => null };
     if (name === "@/src/lib/db") return { db };
     if (name === "@/src/lib/videos") return helper;
     if (name === "next/server") return { ...require(name), connection: async () => {} };

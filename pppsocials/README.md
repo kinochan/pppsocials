@@ -1,5 +1,52 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Application login
+
+The app uses individual email/password accounts. Administrators can manage
+users and social connections; standard users can access the dashboard, uploads,
+and Library. There is no public signup. All accounts share the same video
+library and social connections.
+
+Before deploying this version:
+
+1. Back up the database. In aaPanel's database console, run the statements in
+   `docs/auth.sql` once against the app's existing database. These are new
+   tables; do not overwrite existing tables or delete existing videos.
+2. Privately generate **two different** random secrets, for example by running
+   `openssl rand -hex 32` twice on your own computer. Do not send them in chat,
+   commit them, or use an online generator.
+3. In the Node app's private environment in aaPanel, set:
+   - `APP_URL` to the exact public HTTPS origin, with no trailing slash
+     (for example `https://example.com`).
+   - `BETTER_AUTH_SECRET` to the first 64-character hexadecimal secret. Keep
+     it stable and backed up; changing it signs everyone out.
+   - `AUTH_SETUP_SECRET` to the second 64-character hexadecimal secret.
+   - The existing `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`.
+4. Deploy the code, install its dependencies, build using Node 20.9 or later
+   (use the same Node 26 installation already configured for this app), and
+   restart the Node app. A successful Git pull alone does not build or restart
+   it. Keep HTTPS enabled, and restrict direct access to the Node.js port.
+5. Visit `<APP_URL>/setup` and enter the setup secret, administrator email,
+   and a unique password of 12–128 characters. Setup is allowed only while
+   there are no users, and simultaneous setup attempts are serialized.
+6. Remove `AUTH_SETUP_SECRET` from the server environment and restart the app.
+   Sign in at `<APP_URL>/login` and use **Users** to create accounts. Share
+   temporary passwords through a secure channel, not in public messages.
+
+Administrators can reset passwords and disable or re-enable standard users.
+Resetting a password or disabling a user revokes that user's sessions.
+Administrator accounts cannot be disabled from this screen, preventing an
+accidental lockout. Sessions expire after 24 hours, or when the browser
+session ends. Login attempts are limited to 10 per 15 minutes across the app
+as a whole; this deliberately avoids trusting client-supplied IP headers. If
+the limit is reached, everyone must wait for the window to expire.
+
+The login protects dashboard pages, APIs, video streams, and connection
+callbacks. Continue to restrict the Node port and uploaded files from direct
+web-server access. Users who were signed in on a shared device should use
+**Sign out**. An administrator must reset forgotten passwords; email-based
+recovery is not configured.
+
 ## Upload database setup
 
 Configure `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` for
@@ -17,9 +64,8 @@ files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
 depends on the video format and codec supported by the browser. Publishing and
-post descriptions are not implemented yet. The Library and its video endpoints
-do not have built-in authentication: protect the entire app with a trusted
-reverse proxy and restrict direct access to the Node.js port.
+post descriptions are not implemented yet. The Library and video endpoints
+require an application login.
 
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
@@ -68,11 +114,9 @@ is writable and has enough free disk space.
 The Instagram connection uses Meta's Instagram API with Unified Login and stores
 one shared business connection for the app. It does not publish videos yet.
 
-**The app does not have team login yet.** The connections are disabled by default.
-Before enabling it, protect the entire application, including `/settings` and
-all `/api/instagram/*` and `/api/facebook/*` routes, with authentication at Nginx or another trusted
-reverse proxy. Restrict direct access to the Node.js port so the proxy cannot be
-bypassed. Anyone who can access these routes can replace the shared connection.
+The connections are disabled by default. Complete application login setup before
+enabling them, and restrict direct access to the Node.js port. Only application
+administrators can access social settings and connection routes.
 
 1. Apply `docs/instagram.sql` to the same MySQL database as the app:
 
@@ -126,9 +170,8 @@ The YouTube connection stores multiple channels, authorized one at a time. It
 requests only the `youtube.readonly` scope; Shorts publishing is not implemented
 and will require additional authorization.
 
-**Protect the entire app with authentication at a trusted reverse proxy and
-block direct access to the Node.js port before enabling this feature.** Anyone
-who can access Settings and the YouTube routes can add or reconnect channels.
+Complete application login setup and block direct access to the Node.js port
+before enabling this feature. Administrators can add or reconnect channels.
 
 1. Apply `docs/youtube.sql` to the app database once.
 2. In Google Cloud, enable **YouTube Data API v3** and configure the OAuth
@@ -159,9 +202,8 @@ The TikTok connection stores multiple accounts, authorized one at a time using
 Login Kit's `user.info.basic` scope. It does not publish videos; posting requires
 additional TikTok permissions, review, and implementation.
 
-**Protect the entire app with authentication at a trusted reverse proxy and
-block direct access to the Node.js port before enabling this feature.** Anyone
-who can reach Settings and the TikTok routes can add or reconnect accounts.
+Complete application login setup and block direct access to the Node.js port
+before enabling this feature. Administrators can add or reconnect accounts.
 
 1. Apply `docs/tiktok.sql` to the app database once.
 2. Create an app at [TikTok for Developers](https://developers.tiktok.com/),

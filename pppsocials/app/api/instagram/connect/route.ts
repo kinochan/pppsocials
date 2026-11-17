@@ -1,8 +1,11 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { instagramConfig, stateCookie } from "@/src/lib/instagram";
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   try {
     const config = instagramConfig();
     if (!config) {

@@ -7,11 +7,14 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import busboy from "busboy";
 import type { RowDataPacket } from "mysql2";
+import { requireApiAccess } from "@/src/lib/access";
 import { findDuplicates, removeUnreferencedFile, safeFilename, uploadFilePath, validOriginalFilename, validVideoId, withVideoLock } from "@/src/lib/videos";
 
 const maxVideoBytes = 1_000_000_000;
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   let uploadPath: string | undefined;
   let created = false;
   let fileWrite: Promise<void> | undefined;

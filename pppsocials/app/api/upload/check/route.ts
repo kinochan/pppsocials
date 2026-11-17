@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { db } from "@/src/lib/db";
 import { findDuplicates, validOriginalFilename } from "@/src/lib/videos";
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   let input: unknown;
   try {
     input = await request.json();

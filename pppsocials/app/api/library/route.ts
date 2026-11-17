@@ -1,6 +1,7 @@
 import { connection, NextResponse } from "next/server";
 import type { RowDataPacket } from "mysql2";
 import { db } from "@/src/lib/db";
+import { requireApiAccess } from "@/src/lib/access";
 
 interface VideoRow extends RowDataPacket {
   id: string;
@@ -10,7 +11,9 @@ interface VideoRow extends RowDataPacket {
   original_filename: string | null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   await connection();
   try {
     const [videos] = await db.execute<VideoRow[]>(

@@ -1,8 +1,11 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { tiktokBasicScope, tiktokConfig, tiktokStateCookie } from "@/src/lib/tiktok";
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   try {
     const config = tiktokConfig();
     if (!config) return NextResponse.json({ message: "TikTok connection is disabled." }, { status: 503 });

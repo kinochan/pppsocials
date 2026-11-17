@@ -24,7 +24,8 @@ async function load(file, dependencies, fetchMock, variables = env) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
   }).outputText;
   const exports = {};
-  const mockRequire = (name) => name in dependencies ? dependencies[name] : require(name);
+  const mockRequire = (name) => name === "@/src/lib/access" ? { requireApiAccess: async () => null } :
+    name in dependencies ? dependencies[name] : require(name);
   new Function("require", "exports", "process", "fetch", compiled)(
     mockRequire, exports, { env: variables }, fetchMock
   );

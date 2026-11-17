@@ -1,7 +1,10 @@
 import { connection, NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { facebookConfig, savedFacebookPages } from "@/src/lib/facebook";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   await connection();
   try {
     const config = facebookConfig();

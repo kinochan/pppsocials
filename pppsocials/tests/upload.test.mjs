@@ -38,6 +38,7 @@ async function loadHandler(directory, execute, busboyOverride, customConnection)
   }).outputText;
   const exports = {};
   const mockRequire = (name) => {
+    if (name === "@/src/lib/access") return { requireApiAccess: async () => null };
     if (name === "@/src/lib/videos") return helper;
     if (name === "busboy" && busboyOverride) return busboyOverride;
     return require(name);

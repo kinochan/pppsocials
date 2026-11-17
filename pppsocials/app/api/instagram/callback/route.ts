@@ -1,8 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { connectInstagram, InstagramConnectionError, instagramConfig, stateCookie } from "@/src/lib/instagram";
 
 export async function GET(request: NextRequest) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   let config;
   try {
     config = instagramConfig();

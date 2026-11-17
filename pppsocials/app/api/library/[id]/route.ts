@@ -3,6 +3,7 @@ import { open } from "fs/promises";
 import type { RowDataPacket } from "mysql2";
 import path from "path";
 import { db } from "@/src/lib/db";
+import { requireApiAccess } from "@/src/lib/access";
 import { removeUnreferencedFile, uploadFilePath, validVideoId, withVideoLock } from "@/src/lib/videos";
 
 interface VideoRow extends RowDataPacket {
@@ -18,6 +19,8 @@ const contentTypes: Record<string, string> = {
 };
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   const { id } = await context.params;
   if (!validVideoId(id)) {
     return new Response("Video not found.", { status: 404 });
@@ -117,6 +120,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 }
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  const denied = await requireApiAccess(request);
+  if (denied) return denied;
   const { id } = await context.params;
   if (!validVideoId(id)) return new Response("Video not found.", { status: 404 });
 

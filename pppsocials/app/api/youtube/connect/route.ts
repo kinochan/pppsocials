@@ -1,8 +1,11 @@
 import { createHash, randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { youtubeConfig, youtubeReadonlyScope, youtubeStateCookie } from "@/src/lib/youtube";
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   try {
     const config = youtubeConfig();
     if (!config) return NextResponse.json({ message: "YouTube connection is disabled." }, { status: 503 });

@@ -1,0 +1,62 @@
+CREATE TABLE auth_user (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(191) NOT NULL UNIQUE,
+  emailVerified BOOLEAN NOT NULL DEFAULT FALSE,
+  image TEXT NULL,
+  createdAt DATETIME(3) NOT NULL,
+  updatedAt DATETIME(3) NOT NULL,
+  role VARCHAR(255) NULL,
+  banned BOOLEAN NULL DEFAULT FALSE,
+  banReason TEXT NULL,
+  banExpires DATETIME(3) NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE auth_session (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  expiresAt DATETIME(3) NOT NULL,
+  token VARCHAR(191) NOT NULL UNIQUE,
+  createdAt DATETIME(3) NOT NULL,
+  updatedAt DATETIME(3) NOT NULL,
+  ipAddress VARCHAR(255) NULL,
+  userAgent TEXT NULL,
+  userId VARCHAR(64) NOT NULL,
+  impersonatedBy VARCHAR(64) NULL,
+  INDEX (userId),
+  FOREIGN KEY (userId) REFERENCES auth_user(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE auth_account (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  accountId VARCHAR(255) NOT NULL,
+  providerId VARCHAR(255) NOT NULL,
+  userId VARCHAR(64) NOT NULL,
+  accessToken TEXT NULL,
+  refreshToken TEXT NULL,
+  idToken TEXT NULL,
+  accessTokenExpiresAt DATETIME(3) NULL,
+  refreshTokenExpiresAt DATETIME(3) NULL,
+  scope TEXT NULL,
+  password TEXT NULL,
+  createdAt DATETIME(3) NOT NULL,
+  updatedAt DATETIME(3) NOT NULL,
+  INDEX (userId),
+  FOREIGN KEY (userId) REFERENCES auth_user(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE auth_verification (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  identifier VARCHAR(191) NOT NULL,
+  value TEXT NOT NULL,
+  expiresAt DATETIME(3) NOT NULL,
+  createdAt DATETIME(3) NOT NULL,
+  updatedAt DATETIME(3) NOT NULL,
+  INDEX (identifier)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE auth_rate_limit (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  `key` VARCHAR(191) NOT NULL UNIQUE,
+  count INT NOT NULL,
+  lastRequest BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

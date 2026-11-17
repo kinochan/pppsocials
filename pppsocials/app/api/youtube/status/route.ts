@@ -1,7 +1,10 @@
 import { connection, NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { savedYouTubeChannels, youtubeConfig } from "@/src/lib/youtube";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   await connection();
   try {
     const config = youtubeConfig();

@@ -1,8 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { connectYouTube, YouTubeConnectionError, youtubeConfig, youtubeStateCookie } from "@/src/lib/youtube";
 
 export async function GET(request: NextRequest) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   let config;
   try {
     config = youtubeConfig();

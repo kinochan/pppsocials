@@ -1,8 +1,11 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { connectFacebook, FacebookConnectionError, facebookConfig, facebookStateCookie } from "@/src/lib/facebook";
 
 export async function GET(request: NextRequest) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   let config;
   try {
     config = facebookConfig();

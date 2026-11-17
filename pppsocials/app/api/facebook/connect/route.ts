@@ -1,8 +1,11 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+import { requireApiAccess } from "@/src/lib/access";
 import { facebookConfig, facebookStateCookie } from "@/src/lib/facebook";
 
 export async function POST(request: Request) {
+  const denied = await requireApiAccess(request, true);
+  if (denied) return denied;
   try {
     const config = facebookConfig();
     if (!config) return NextResponse.json({ message: "Facebook connection is disabled." }, { status: 503 });
