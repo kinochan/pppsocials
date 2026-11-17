@@ -46,8 +46,11 @@ function safeUploadUrl(value: unknown) {
     console.error("TikTok upload URL rejected:", { url: "unparseable" });
     throw new TikTokUploadError("TikTok returned an invalid upload URL (unparseable).");
   }
-  if (url.protocol !== "https:" || !["open-upload.tiktokapis.com", "upload.us.tiktokapis.com"].includes(url.hostname) ||
-      url.port || url.username || url.password || url.hash || !["/video/", "/upload/"].includes(url.pathname) ||
+  const allowedHosts = ["open-upload.tiktokapis.com", "open-upload-i18n.tiktokapis.com",
+    "open-upload.tiktokapis.us", "upload.us.tiktokapis.com"];
+  const allowedPaths = ["/video/", "/upload/", "/upload"];
+  if (url.protocol !== "https:" || !allowedHosts.includes(url.hostname) ||
+      url.port || url.username || url.password || url.hash || !allowedPaths.includes(url.pathname) ||
       url.searchParams.getAll("upload_id").length !== 1 || !url.searchParams.get("upload_id") ||
       url.searchParams.getAll("upload_token").length !== 1 || !url.searchParams.get("upload_token")) {
     const parameterState = (name: string) => {
@@ -56,9 +59,9 @@ function safeUploadUrl(value: unknown) {
     };
     const diagnostic = {
       https: url.protocol === "https:",
-      host: ["open-upload.tiktokapis.com", "upload.us.tiktokapis.com"].includes(url.hostname)
-        ? "documented" : url.hostname.endsWith(".tiktokapis.com") ? "other-tiktokapis-subdomain" : "other",
-      path: ["/video/", "/upload/"].includes(url.pathname) ? "documented" : "other",
+      host: allowedHosts.includes(url.hostname)
+        ? "allowed" : url.hostname.endsWith(".tiktokapis.com") ? "other-tiktokapis-subdomain" : "other",
+      path: allowedPaths.includes(url.pathname) ? "allowed" : "other",
       uploadId: parameterState("upload_id"),
       uploadToken: parameterState("upload_token"),
       hasPort: !!url.port,

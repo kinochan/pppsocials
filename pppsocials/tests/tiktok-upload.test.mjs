@@ -86,6 +86,24 @@ test("uploads the video to TikTok and reports processing rather than a completed
   assert.equal(calls[1].options.headers["Content-Range"], "bytes 0-9/10");
 });
 
+test("accepts observed regional upload endpoints without accepting lookalike hosts", async () => {
+  for (const host of ["open-upload.tiktokapis.us", "open-upload-i18n.tiktokapis.com"]) {
+    let calls = 0;
+    const result = await runUpload(async () => ++calls === 1
+      ? ok({ publish_id: "id", upload_url: `https://${host}/upload?upload_id=test&upload_token=secret` })
+      : new Response(null, { status: 201 }));
+    assert.equal(result.status, "processing");
+    assert.equal(calls, 2);
+  }
+  let calls = 0;
+  const result = await runUpload(async () => {
+    calls++;
+    return ok({ publish_id: "id", upload_url: "https://open-upload.tiktokapis.us.evil.example/upload?upload_id=x&upload_token=y" });
+  });
+  assert.equal(result.status, "failed");
+  assert.equal(calls, 1);
+});
+
 test("rejects untrusted upload URLs and preserves uncertain transfers", async () => {
   let calls = 0;
   const unsafe = await runUpload(async () => {
