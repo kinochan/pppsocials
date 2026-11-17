@@ -101,6 +101,27 @@ test("rejects untrusted upload URLs and preserves uncertain transfers", async ()
   assert.equal(uncertain.active, 1);
 });
 
+test("reports only safe URL shape when TikTok returns an unexpected upload URL", async () => {
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => logged.push(args);
+  try {
+    const result = await runUpload(async () => ok({
+      publish_id: "id",
+      upload_url: "https://regional.tiktokapis.com/secret-path?upload_id=private-id&upload_token=private-token",
+    }));
+    assert.equal(result.status, "failed");
+  } finally {
+    console.error = original;
+  }
+  const diagnostic = logged.find(([message]) => message === "TikTok upload URL rejected:");
+  assert.deepEqual(diagnostic[1], {
+    https: true, host: "other-tiktokapis-subdomain", path: "other", uploadId: "present",
+    uploadToken: "present", hasPort: false, hasCredentials: false, hasFragment: false,
+  });
+  assert.doesNotMatch(JSON.stringify(logged), /private-id|private-token|secret-path/);
+});
+
 test("splits large uploads according to TikTok's final-chunk rules", async () => {
   const ranges = [];
   let init;
