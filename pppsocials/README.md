@@ -153,6 +153,40 @@ Settings shows saved channels without checking whether their tokens still work.
 Do not log query strings or sensitive referrers for `/api/youtube/callback`;
 the callback contains a temporary authorization code.
 
+## TikTok accounts
+
+The TikTok connection stores multiple accounts, authorized one at a time using
+Login Kit's `user.info.basic` scope. It does not publish videos; posting requires
+additional TikTok permissions, review, and implementation.
+
+**Protect the entire app with authentication at a trusted reverse proxy and
+block direct access to the Node.js port before enabling this feature.** Anyone
+who can reach Settings and the TikTok routes can add or reconnect accounts.
+
+1. Apply `docs/tiktok.sql` to the app database once.
+2. Create an app at [TikTok for Developers](https://developers.tiktok.com/),
+   add **Login Kit** for web, and register the exact redirect URI
+   `<APP_URL>/api/tiktok/callback`. Configure the `user.info.basic` scope.
+3. Configure these server-side environment variables (never commit or share
+   the client secret):
+   - `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`: the selected TikTok app's credentials.
+   - `APP_URL`: the app's public HTTPS origin.
+   - `INSTAGRAM_TOKEN_KEY`: the same persistent encryption key used by the
+     existing integrations. Back it up securely; changing it makes saved
+     tokens unreadable.
+   - `TIKTOK_CONNECTION_ENABLED=true`: set only after protecting the app.
+4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
+   TikTok account** and authorize the intended account. Repeat for each account;
+   reconnecting one updates only that account. Switch TikTok accounts if needed.
+
+TikTok offers [sandbox testing](https://developers.tiktok.com/doc/add-a-sandbox/)
+with separate sandbox credentials and target users. Production access requires
+TikTok review. The stored access and refresh tokens are encrypted; this app does
+not yet refresh them automatically. Expired or revoked connections require
+reconnecting. Settings shows saved accounts without checking token validity.
+Do not log query strings or sensitive referrers for `/api/tiktok/callback`;
+the callback contains a temporary authorization code.
+
 ## Getting Started
 
 First, run the development server:

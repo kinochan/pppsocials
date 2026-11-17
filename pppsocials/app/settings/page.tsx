@@ -14,6 +14,10 @@ type YouTubeStatus =
   | { enabled: false }
   | { enabled: true; channels: { id: string; title: string }[] };
 
+type TikTokStatus =
+  | { enabled: false }
+  | { enabled: true; accounts: { id: string; displayName: string }[] };
+
 export default function SettingsPage() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
   const [error, setError] = useState("");
@@ -24,13 +28,17 @@ export default function SettingsPage() {
   const [youtubeStatus, setYouTubeStatus] = useState<YouTubeStatus | null>(null);
   const [youtubeError, setYouTubeError] = useState("");
   const [youtubeResult, setYouTubeResult] = useState("");
+  const [tiktokStatus, setTikTokStatus] = useState<TikTokStatus | null>(null);
+  const [tiktokError, setTikTokError] = useState("");
+  const [tiktokResult, setTikTokResult] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const outcome = params.get("instagram");
     const facebookOutcome = params.get("facebook");
     const youtubeOutcome = params.get("youtube");
-    if (outcome || facebookOutcome || youtubeOutcome) window.history.replaceState(null, "", "/settings");
+    const tiktokOutcome = params.get("tiktok");
+    if (outcome || facebookOutcome || youtubeOutcome || tiktokOutcome) window.history.replaceState(null, "", "/settings");
 
     async function loadStatus() {
       try {
@@ -76,6 +84,21 @@ export default function SettingsPage() {
       }
     }
     void loadYouTubeStatus();
+
+    async function loadTikTokStatus() {
+      try {
+        const response = await fetch("/api/tiktok/status", { cache: "no-store" });
+        if (!response.ok) throw new Error("Status request failed");
+        setTikTokStatus(await response.json());
+        if (tiktokOutcome === "connected") setTikTokResult("TikTok account saved.");
+        if (tiktokOutcome === "cancelled") setTikTokError("TikTok authorization was cancelled or rejected.");
+        if (tiktokOutcome === "invalid-state") setTikTokError("The connection request expired or was invalid. Please try again.");
+        if (tiktokOutcome === "failed") setTikTokError("Could not connect TikTok. Check the server logs and try again.");
+      } catch {
+        setTikTokError("Could not load TikTok connection status. Check the server configuration and database.");
+      }
+    }
+    void loadTikTokStatus();
   }, []);
 
   return (
@@ -106,6 +129,36 @@ export default function SettingsPage() {
             <form action="/api/instagram/connect" method="post">
               <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
                 {status.accounts ? "Reconnect or replace accounts" : "Connect Instagram"}
+              </button>
+            </form>
+          </>
+        )}
+      </section>
+      <section className="border rounded-lg p-4 bg-white shadow mt-6">
+        <h2 className="text-xl font-semibold mb-3">TikTok</h2>
+        <p className="mb-3">
+          Connect TikTok accounts one at a time using basic account access.
+          Posting videos will require additional permission later.
+        </p>
+        {tiktokResult && <p role="status" className="mb-3 text-green-700">{tiktokResult}</p>}
+        {tiktokError && <p role="alert" className="mb-3 text-red-700">{tiktokError}</p>}
+        {!tiktokStatus && !tiktokError && <p>Loading connection status...</p>}
+        {tiktokStatus && !tiktokStatus.enabled && (
+          <p>TikTok connection is disabled. See the server setup instructions in the README.</p>
+        )}
+        {tiktokStatus?.enabled && (
+          <>
+            {tiktokStatus.accounts.length > 0 ? (
+              <>
+                <p className="mb-2">Saved accounts (connection not checked with TikTok):</p>
+                <ul className="list-disc pl-6 mb-3">
+                  {tiktokStatus.accounts.map((account) => <li key={account.id}>{account.displayName}</li>)}
+                </ul>
+              </>
+            ) : <p className="mb-3">No TikTok accounts connected.</p>}
+            <form action="/api/tiktok/connect" method="post">
+              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Connect a TikTok account
               </button>
             </form>
           </>
