@@ -1,6 +1,5 @@
 import { constants } from "fs";
 import { open } from "fs/promises";
-import { Readable } from "stream";
 import type { ResultSetHeader } from "mysql2";
 import { db } from "@/src/lib/db";
 import { uploadFilePath } from "@/src/lib/videos";
@@ -8,7 +7,6 @@ import { uploadFilePath } from "@/src/lib/videos";
 type PublishInput = {
   id: string;
   accountId: string;
-  caption: string;
   filepath: string;
   token: string;
 };
@@ -36,7 +34,16 @@ async function transition(id: string, from: string, to: string, containerId?: st
   return result.affectedRows === 1;
 }
 
-export async function publishInstagramReel(input: PublishInput) {
+async function updateUploadProgress(id: string, percent: number) {
+  const [result] = await db.execute<ResultSetHeader>(
+    `UPDATE instagram_publications SET upload_percent = ?, updated_at = UTC_TIMESTAMP()
+     WHERE id = ? AND status = 'uploading' AND active = 1`,
+    [percent, id]
+  );
+  if (result.affectedRows !== 1) throw new PublishError("The publication is no longer active.");
+}
+
+export async function publishInstagramStory(input: PublishInput) {
   let mayHavePublished = false;
   let stage = "starting";
   let file: Awaited<ReturnType<typeof open>> | undefined;
@@ -46,12 +53,14 @@ export async function publishInstagramReel(input: PublishInput) {
     file = await open(uploadFilePath(input.filepath), constants.O_RDONLY | constants.O_NOFOLLOW);
     const stats = await file.stat();
     if (!stats.isFile() || stats.size <= 0) throw new PublishError("Video file is missing or empty.");
+    if (stats.size > 100_000_000) throw new PublishError("Instagram Story videos cannot exceed 100 MB.");
+    await updateUploadProgress(input.id, 0);
 
     const graph = "https://graph.facebook.com/v27.0";
     const created = await metaJson(`${graph}/${encodeURIComponent(input.accountId)}/media`, {
       method: "POST",
       headers: { Authorization: `Bearer ${input.token}`, "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ media_type: "REELS", upload_type: "resumable", caption: input.caption }),
+      body: new URLSearchParams({ media_type: "STORIES", upload_type: "resumable" }),
       signal: AbortSignal.timeout(30000),
     });
     if (typeof created.id !== "string" || !/^\d{1,191}$/.test(created.id)) {
@@ -62,6 +71,32 @@ export async function publishInstagramReel(input: PublishInput) {
 
     const stream = file.createReadStream({ autoClose: false });
     try {
+      const iterator = stream[Symbol.asyncIterator]();
+      let bytesRead = 0;
+      let lastPercent = 0;
+      const body = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const result = await iterator.next();
+            if (result.done) {
+              controller.close();
+              return;
+            }
+            bytesRead += result.value.byteLength;
+            const percent = Math.min(99, Math.floor(bytesRead * 100 / stats.size));
+            if (percent >= lastPercent + 5) {
+              await updateUploadProgress(input.id, percent);
+              lastPercent = percent;
+            }
+            controller.enqueue(result.value);
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+        cancel() {
+          stream.destroy();
+        },
+      });
       const options = {
         method: "POST",
         headers: {
@@ -71,7 +106,7 @@ export async function publishInstagramReel(input: PublishInput) {
           "Content-Length": String(stats.size),
           "Content-Type": "application/octet-stream",
         },
-        body: Readable.toWeb(stream) as ReadableStream<Uint8Array>,
+        body,
         duplex: "half" as const,
         signal: AbortSignal.timeout(45 * 60 * 1000),
       };
@@ -79,6 +114,8 @@ export async function publishInstagramReel(input: PublishInput) {
         `https://rupload.facebook.com/ig-api-upload/v27.0/${containerId}`, options
       );
       if (uploaded.success !== true) throw new PublishError("Meta did not confirm the upload.");
+      if (bytesRead !== stats.size) throw new PublishError("Meta confirmed an incomplete upload.");
+      await updateUploadProgress(input.id, 100);
     } finally {
       stream.destroy();
     }
@@ -131,7 +168,7 @@ export async function publishInstagramReel(input: PublishInput) {
           mayHavePublished ? 1 : null,
           mayHavePublished
             ? "The publish result is unknown. Check Instagram before trying again."
-            : "The video could not be uploaded or processed. Check the server logs.",
+            : error instanceof PublishError ? error.message : "The video could not be uploaded or processed. Check the server logs.",
           input.id,
         ]
       );

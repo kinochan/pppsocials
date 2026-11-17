@@ -24,7 +24,7 @@
 
 ### Library
 - Edit video
-- Publish Instagram Reels with an editable caption
+- Publish Instagram Stories
 - Add Facebook Stories, TikTok, and YouTube Shorts publishing
 
 ### Integrations

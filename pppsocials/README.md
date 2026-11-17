@@ -63,7 +63,7 @@ the new file is removed when possible and the upload reports an error. Existing
 files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
-depends on the video format and codec supported by the browser. Instagram Reel
+depends on the video format and codec supported by the browser. Instagram Story
 publishing is available as described below; other publishing integrations are
 not implemented yet. The Library and video endpoints require an application
 login.
@@ -149,19 +149,32 @@ returned to the browser. Do not share screenshots containing tokens or secrets.
 Meta app review and appropriate access levels may be needed for users without
 app roles. Webhooks are not implemented.
 
-### Publishing Instagram Reels
+### Publishing Instagram Stories
 
-Back up the database, then apply `docs/instagram-publications.sql` once before
-deploying this version. Configure the Unified Login permissions to include
-`instagram_content_publish`, and reconnect the Instagram account if necessary
-to grant it. Meta access levels, app review, or Page publishing authorization
-may also be required.
+Back up the database and wait for ongoing publishing attempts to finish before
+stopping the app for deployment. If the `instagram_publications` table does not
+exist, apply `docs/instagram-publications.sql` once. If it already exists from
+the earlier Reel publisher, apply `docs/instagram-publications-story-progress.sql`
+once instead; do not rerun either script if its changes already exist. The
+migration preserves existing attempts and identifies them as Reels.
+
+Configure the Unified Login permissions to include `instagram_content_publish`,
+and reconnect the Instagram account if necessary to grant it. Meta access levels,
+app review, or Page publishing authorization may also be required.
 
 Every signed-in user can select a Library video, choose connected Instagram
-accounts, edit the caption, and confirm public Reel publishing. The app streams
-the video directly to Meta; it does not make the Library publicly accessible.
-Check Meta's video specifications before uploading; videos are not converted.
-The Library records each account's progress and refreshes it while open.
+accounts, and confirm Story publishing. The Library description is not added as
+text to the Story. The app streams the video directly to Meta; it does not make
+the Library publicly accessible. Meta specifies Story videos of 3-60 seconds
+and at most 100 MB (100,000,000 bytes), along with other format requirements.
+The app rejects larger files but does not check duration or convert videos.
+Check [Meta's specifications](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media)
+before publishing.
+
+The Library records each account's status and refreshes it while open. The
+upload percentage measures bytes read for transfer to Meta, not receipt by Meta;
+100% is shown only once Meta confirms the upload. Processing and publishing
+have indeterminate progress because Meta does not report a percentage.
 
 The app must remain running during uploads and processing. If the server stops,
 the request is interrupted, or the final Meta response is lost, the result may
@@ -169,7 +182,7 @@ be uncertain. Check the Instagram account before resolving an uncertain or
 stalled attempt and trying again: otherwise a duplicate may be published.
 Uncertain attempts can be resolved immediately; interrupted attempts become
 resolvable after 90 minutes. Meta may take additional time to show a published
-Reel. A webhook is not used for this publishing flow.
+Story. A webhook is not used for this publishing flow.
 
 ## Facebook Page connection
 

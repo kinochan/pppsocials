@@ -3,7 +3,7 @@ import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { requireApiAccess } from "@/src/lib/access";
 import { db } from "@/src/lib/db";
 import { instagramConfig, instagramPublishingConnection, savedInstagramAccounts } from "@/src/lib/instagram";
-import { publishInstagramReel } from "@/src/lib/instagram-publish";
+import { publishInstagramStory } from "@/src/lib/instagram-publish";
 import { validVideoId } from "@/src/lib/videos";
 
 export const maxDuration = 3600;
@@ -18,6 +18,8 @@ interface PublicationRow extends RowDataPacket {
   accountId: string;
   username: string;
   status: string;
+  mediaType: string;
+  uploadPercent: number | null;
   message: string | null;
   mediaId: string | null;
   createdAt: string;
@@ -62,6 +64,7 @@ export async function GET(request: Request) {
     const accounts = config ? await savedInstagramAccounts() : null;
     const [publications] = await db.execute<PublicationRow[]>(
       `SELECT id, account_id AS accountId, username, status, message, media_id AS mediaId,
+       media_type AS mediaType, upload_percent AS uploadPercent,
        DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
        (status = 'unknown' OR (active = 1 AND updated_at < UTC_TIMESTAMP() - INTERVAL 90 MINUTE)) AS canResolve
        FROM instagram_publications WHERE video_id = ? ORDER BY active DESC, created_at DESC, id DESC LIMIT 50`,
@@ -85,8 +88,8 @@ export async function POST(request: Request) {
       typeof input.videoId !== "string" || !validVideoId(input.videoId) ||
       typeof input.filename !== "string" || !input.filename ||
       typeof input.accountId !== "string" || !/^\d{1,191}$/.test(input.accountId) ||
-      typeof input.caption !== "string" || Array.from(input.caption).length > 2200) {
-    return Response.json({ message: "Invalid publishing request." }, { status: 400 });
+      input.mediaType !== "STORIES") {
+    return Response.json({ message: "Invalid publishing request. Refresh the page and try again." }, { status: 400 });
   }
   try {
     const config = instagramConfig();
@@ -101,8 +104,8 @@ export async function POST(request: Request) {
     try {
       await db.execute(
         `INSERT INTO instagram_publications
-         (id, video_id, account_id, username, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 'queued', UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
+         (id, video_id, account_id, username, status, media_type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 'queued', 'STORIES', UTC_TIMESTAMP(), UTC_TIMESTAMP())`,
         [input.id, input.videoId, account.id, account.username]
       );
     } catch (error) {
@@ -114,11 +117,10 @@ export async function POST(request: Request) {
     const job = {
       id: input.id,
       accountId: account.id,
-      caption: input.caption,
       filepath: videos[0].filepath,
       token: connection.token,
     };
-    after(() => publishInstagramReel(job));
+    after(() => publishInstagramStory(job));
     return Response.json({ id: input.id }, { status: 202, headers: { "Cache-Control": "no-store" } });
   } catch {
     console.error("Could not start Instagram publication. Check configuration and database.");

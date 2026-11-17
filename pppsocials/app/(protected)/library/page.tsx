@@ -92,7 +92,7 @@ export default function LibraryPage() {
               {failedVideos.includes(video.id) && (
                 <p role="alert">Unable to play this video. The file may be missing or unsupported by your browser.</p>
               )}
-              <InstagramPublish videoId={video.id} filename={video.filename} description={video.description} />
+              <InstagramPublish videoId={video.id} filename={video.filename} />
               <button
                 type="button"
                 disabled={deleting !== null}
