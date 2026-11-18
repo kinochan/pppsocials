@@ -12,7 +12,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-async function apiRequest(endpoint: string, token: string, body: object) {
+export async function tiktokPublishRequest(endpoint: string, token: string, body: object) {
   const response = await fetch(`https://open.tiktokapis.com/v2/post/publish/${endpoint}/`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json; charset=UTF-8" },
@@ -97,7 +97,7 @@ export async function uploadTikTokDraft(input: { id: string; accountId: string; 
     const token = await tiktokUploadToken(input.accountId, config);
     const chunkSize = stats.size <= 64_000_000 ? stats.size : 10_000_000;
     const count = Math.floor(stats.size / chunkSize);
-    const init = await apiRequest("inbox/video/init", token, {
+    const init = await tiktokPublishRequest("inbox/video/init", token, {
       source_info: { source: "FILE_UPLOAD", video_size: stats.size, chunk_size: chunkSize, total_chunk_count: count },
     });
     if (typeof init.publish_id !== "string" || !/^[A-Za-z0-9_~.-]{1,64}$/.test(init.publish_id)) {
@@ -170,7 +170,7 @@ export async function checkTikTokUpload(id: string) {
   const config = tiktokConfig();
   if (!config?.uploadEnabled) throw new TikTokUploadError("TikTok uploads are disabled.");
   const token = await tiktokUploadToken(rows[0].account_id, config);
-  const data = await apiRequest("status/fetch", token, { publish_id: rows[0].publish_id });
+  const data = await tiktokPublishRequest("status/fetch", token, { publish_id: rows[0].publish_id });
   let status: string;
   let active: number | null;
   let message: string;

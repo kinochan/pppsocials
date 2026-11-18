@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { requireApiAccess } from "@/src/lib/access";
-import { tiktokBasicScope, tiktokConfig, tiktokStateCookie, tiktokUploadScope } from "@/src/lib/tiktok";
+import { tiktokBasicScope, tiktokConfig, tiktokPublishScope, tiktokStateCookie, tiktokUploadScope } from "@/src/lib/tiktok";
 
 export async function POST(request: Request) {
   const denied = await requireApiAccess(request, true);
@@ -17,7 +17,10 @@ export async function POST(request: Request) {
     url.searchParams.set("client_key", config.clientKey);
     url.searchParams.set("redirect_uri", config.redirectUrl);
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", config.uploadEnabled ? [tiktokBasicScope, tiktokUploadScope].join(",") : tiktokBasicScope);
+    const scopes = [tiktokBasicScope];
+    if (config.uploadEnabled) scopes.push(tiktokUploadScope);
+    if (config.directEnabled) scopes.push(tiktokPublishScope);
+    url.searchParams.set("scope", scopes.join(","));
     url.searchParams.set("state", state);
     url.searchParams.set("disable_auto_auth", "1");
     const response = NextResponse.redirect(url, 303);

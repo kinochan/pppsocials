@@ -16,7 +16,7 @@ type YouTubeStatus =
 
 type TikTokStatus =
   | { enabled: false }
-  | { enabled: true; uploadEnabled: boolean; accounts: { id: string; displayName: string }[] };
+  | { enabled: true; uploadEnabled: boolean; directEnabled: boolean; accounts: { id: string; displayName: string }[] };
 
 export default function SettingsPage() {
   const [status, setStatus] = useState<InstagramStatus | null>(null);
@@ -141,6 +141,8 @@ export default function SettingsPage() {
           {tiktokStatus?.enabled && tiktokStatus.uploadEnabled
             ? " Grant video upload access and reconnect existing accounts to send videos to TikTok's inbox."
             : " Video uploads require additional configuration and permission."}
+          {tiktokStatus?.enabled && tiktokStatus.directEnabled &&
+            " Reconnect accounts and grant Direct Post permission to post directly."}
         </p>
         {tiktokResult && <p role="status" className="mb-3 text-green-700">{tiktokResult}</p>}
         {tiktokError && <p role="alert" className="mb-3 text-red-700">{tiktokError}</p>}

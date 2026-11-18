@@ -13,6 +13,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 async function load(metadata, error) {
   const source = await readFile(path.join(root, "src", "lib", "youtube-short.ts"), "utf8");
+  const probeSource = await readFile(path.join(root, "src", "lib", "video-probe.ts"), "utf8");
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
   }).outputText;
@@ -34,8 +35,15 @@ async function load(metadata, error) {
     });
     return child;
   };
-  new Function("require", "exports", "process", compiled)(
-    (name) => name === "child_process" ? { spawn } : require(name), exports, { platform: "linux" }
+  const probe = {};
+  const probeCompiled = ts.transpileModule(probeSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
+  }).outputText;
+  new Function("require", "exports", "process", probeCompiled)(
+    (name) => name === "child_process" ? { spawn } : require(name), probe, { platform: "linux" }
+  );
+  new Function("require", "exports", compiled)(
+    (name) => name === "@/src/lib/video-probe" ? probe : require(name), exports
   );
   return exports;
 }

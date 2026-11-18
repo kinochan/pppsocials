@@ -5,6 +5,7 @@ import { decryptMetaSecret, encryptMetaSecret } from "@/src/lib/meta-crypto";
 export const tiktokStateCookie = "__Host-tiktok-oauth-state";
 export const tiktokBasicScope = "user.info.basic";
 export const tiktokUploadScope = "video.upload";
+export const tiktokPublishScope = "video.publish";
 export class TikTokConnectionError extends Error {}
 
 export function tiktokConfig() {
@@ -26,6 +27,7 @@ export function tiktokConfig() {
     redirectUrl: `${baseUrl.origin}/api/tiktok/callback`,
     key: Buffer.from(INSTAGRAM_TOKEN_KEY, "hex"),
     uploadEnabled: process.env.TIKTOK_UPLOAD_ENABLED === "true",
+    directEnabled: process.env.TIKTOK_DIRECT_POST_ENABLED === "true",
   };
 }
 
@@ -74,6 +76,7 @@ export async function connectTikTok(code: string, config: TikTokConfig) {
       typeof tokenResult.scope !== "string" ||
       !tokenResult.scope.split(",").map((scope) => scope.trim()).includes(tiktokBasicScope) ||
       (config.uploadEnabled && !tokenResult.scope.split(",").map((scope) => scope.trim()).includes(tiktokUploadScope)) ||
+      (config.directEnabled && !tokenResult.scope.split(",").map((scope) => scope.trim()).includes(tiktokPublishScope)) ||
       typeof tokenResult.expires_in !== "number" || !Number.isSafeInteger(tokenResult.expires_in) || tokenResult.expires_in <= 0 ||
       typeof tokenResult.refresh_expires_in !== "number" || !Number.isSafeInteger(tokenResult.refresh_expires_in) ||
       tokenResult.refresh_expires_in <= 0) {
@@ -135,8 +138,9 @@ interface TikTokTokenRow extends RowDataPacket {
   encrypted_tokens: string;
 }
 
-export async function tiktokUploadToken(accountId: string, config: TikTokConfig): Promise<string> {
+export async function tiktokUploadToken(accountId: string, config: TikTokConfig, requiredScope = tiktokUploadScope): Promise<string> {
   const connection = await db.getConnection();
+  let committed = false;
   try {
     await connection.beginTransaction();
     const [rows] = await connection.execute<TikTokTokenRow[]>(
@@ -151,12 +155,13 @@ export async function tiktokUploadToken(accountId: string, config: TikTokConfig)
     }
     if (!isRecord(tokens) || typeof tokens.accessToken !== "string" || !tokens.accessToken ||
         typeof tokens.refreshToken !== "string" || !tokens.refreshToken ||
-        typeof tokens.scope !== "string" || !tokens.scope.split(",").map((scope) => scope.trim()).includes(tiktokUploadScope) ||
+        typeof tokens.scope !== "string" || !tokens.scope.split(",").map((scope) => scope.trim()).includes(requiredScope) ||
         typeof tokens.accessExpiresAt !== "number" || !Number.isSafeInteger(tokens.accessExpiresAt) ||
         typeof tokens.refreshExpiresAt !== "number" || !Number.isSafeInteger(tokens.refreshExpiresAt)) {
-      throw new TikTokConnectionError("Reconnect the TikTok account and grant video upload permission.");
+      throw new TikTokConnectionError(`Reconnect the TikTok account and grant ${requiredScope} permission.`);
     }
     let accessToken = tokens.accessToken;
+    let grantedScope = tokens.scope;
     if (tokens.accessExpiresAt <= Date.now() + 60000) {
       if (tokens.refreshExpiresAt <= Date.now()) {
         throw new TikTokConnectionError("TikTok authorization expired. Reconnect the account.");
@@ -172,7 +177,7 @@ export async function tiktokUploadToken(accountId: string, config: TikTokConfig)
       if (!isRecord(result) || result.open_id !== accountId ||
           typeof result.access_token !== "string" || !result.access_token ||
           typeof result.refresh_token !== "string" || !result.refresh_token ||
-          typeof result.scope !== "string" || !result.scope.split(",").map((scope) => scope.trim()).includes(tiktokUploadScope) ||
+          typeof result.scope !== "string" ||
           typeof result.expires_in !== "number" || !Number.isSafeInteger(result.expires_in) || result.expires_in <= 0 ||
           typeof result.refresh_expires_in !== "number" || !Number.isSafeInteger(result.refresh_expires_in) || result.refresh_expires_in <= 0) {
         throw new TikTokConnectionError("TikTok could not refresh upload access. Reconnect the account.");
@@ -183,15 +188,20 @@ export async function tiktokUploadToken(accountId: string, config: TikTokConfig)
         throw new TikTokConnectionError("TikTok returned invalid token expiry times.");
       }
       accessToken = result.access_token;
+      grantedScope = result.scope;
       const encrypted = encryptMetaSecret(JSON.stringify({
         accessToken, refreshToken: result.refresh_token, scope: result.scope, accessExpiresAt, refreshExpiresAt,
       }), config.key);
       await connection.execute("UPDATE tiktok_accounts SET encrypted_tokens = ? WHERE open_id = ?", [encrypted, accountId]);
     }
     await connection.commit();
+    committed = true;
+    if (!grantedScope.split(",").map((scope) => scope.trim()).includes(requiredScope)) {
+      throw new TikTokConnectionError(`Reconnect the TikTok account and grant ${requiredScope} permission.`);
+    }
     return accessToken;
   } catch (error) {
-    await connection.rollback();
+    if (!committed) await connection.rollback();
     throw error;
   } finally {
     connection.release();

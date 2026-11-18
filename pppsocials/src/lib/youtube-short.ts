@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
-import { stat, type FileHandle } from "fs/promises";
+import type { FileHandle } from "fs/promises";
+import { probeVideo, VideoProbeError } from "@/src/lib/video-probe";
 
 export class ShortsValidationError extends Error {}
 
@@ -8,60 +8,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export async function validateYouTubeShort(file: FileHandle, filepath: string) {
-  const isLinux = process.platform === "linux";
-  const input = isLinux ? "/proc/self/fd/3" : filepath;
-  const args = [
-    "-v", "error", "-protocol_whitelist", "file,pipe",
-    "-format_whitelist", "mov,matroska,avi,mpeg,mpegts,flv,ogg",
-    "-select_streams", "V",
-    "-show_entries", "stream=width,height,sample_aspect_ratio:stream_tags=rotate:stream_side_data_list:format=duration",
-    "-of", "json", "-i", input,
-  ];
-  const output = await new Promise<string>((resolve, reject) => {
-    const child = spawn("ffprobe", args, {
-      stdio: ["ignore", "pipe", "ignore", file.fd],
-      signal: AbortSignal.timeout(30000),
-      windowsHide: true,
-    });
-    if (!child.stdout) {
-      child.kill();
-      reject(new ShortsValidationError("Unable to check video eligibility with ffprobe."));
-      return;
-    }
-    const chunks: Buffer[] = [];
-    let length = 0;
-    let tooLarge = false;
-    child.stdout.on("data", (chunk: Buffer) => {
-      length += chunk.length;
-      if (length > 65536) {
-        tooLarge = true;
-        child.kill();
-      } else {
-        chunks.push(chunk);
-      }
-    });
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      reject(new ShortsValidationError(error.code === "ENOENT"
-        ? "ffprobe is not installed or not available to the app. Ask an administrator to install it."
-        : "Unable to check video eligibility with ffprobe."));
-    });
-    child.on("close", (code) => {
-      if (code !== 0 || tooLarge) reject(new ShortsValidationError("Unable to read video details with ffprobe."));
-      else resolve(Buffer.concat(chunks).toString("utf8"));
-    });
-  });
-  if (!isLinux) {
-    const [opened, current] = await Promise.all([file.stat(), stat(filepath)]);
-    if (opened.dev !== current.dev || opened.ino !== current.ino ||
-        opened.size !== current.size || opened.mtimeMs !== current.mtimeMs) {
-      throw new ShortsValidationError("The video file changed while checking eligibility.");
-    }
-  }
   let metadata: unknown;
   try {
-    metadata = JSON.parse(output);
-  } catch {
-    throw new ShortsValidationError("ffprobe returned invalid video details.");
+    metadata = await probeVideo(file, filepath);
+  } catch (error) {
+    if (error instanceof VideoProbeError) throw new ShortsValidationError(error.message);
+    throw error;
   }
   if (!isRecord(metadata) || !isRecord(metadata.format) || !Array.isArray(metadata.streams) ||
       metadata.streams.length !== 1 || !isRecord(metadata.streams[0])) {

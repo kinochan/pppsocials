@@ -1,0 +1,22 @@
+CREATE TABLE tiktok_direct_posts (
+  id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+  video_id BIGINT UNSIGNED NOT NULL,
+  account_id VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+  account_name VARCHAR(255) NOT NULL,
+  filepath VARCHAR(255) NOT NULL,
+  filename VARCHAR(255) NOT NULL,
+  file_device VARCHAR(32) CHARACTER SET ascii NOT NULL,
+  file_inode VARCHAR(32) CHARACTER SET ascii NOT NULL,
+  file_size VARCHAR(32) CHARACTER SET ascii NOT NULL,
+  file_mtime_ns VARCHAR(32) CHARACTER SET ascii NOT NULL,
+  token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  token_expires_at DATETIME NOT NULL,
+  status VARCHAR(32) CHARACTER SET ascii NOT NULL,
+  active TINYINT NULL DEFAULT 1,
+  publish_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  message VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  UNIQUE KEY active_post (video_id, account_id, active),
+  INDEX video_posts (video_id, created_at)
+) CHARACTER SET utf8mb4;

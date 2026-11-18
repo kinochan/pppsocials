@@ -114,7 +114,7 @@ test("connects multiple accounts and encrypts their tokens and expiry times", as
   assert.ok(secrets.refreshExpiresAt > secrets.accessExpiresAt && secrets.accessExpiresAt > Date.now());
   const statusResponse = await status.GET();
   assert.deepEqual(await statusResponse.json(), {
-    enabled: true, uploadEnabled: true,
+    enabled: true, uploadEnabled: true, directEnabled: false,
     accounts: [{ id: "first", displayName: "Account first" }, { id: "second", displayName: "Account second" }],
   });
   assert.equal(statusResponse.headers.get("cache-control"), "no-store");
@@ -228,7 +228,7 @@ test("requires old basic-only connections to be reauthorized before upload", asy
     "@/src/lib/db": { db: { getConnection: async () => connection } },
     "@/src/lib/meta-crypto": crypto,
   }, async () => { throw new Error("Should not contact TikTok"); });
-  await assert.rejects(() => lib.tiktokUploadToken("first", lib.tiktokConfig()), /Reconnect.*upload permission/);
+  await assert.rejects(() => lib.tiktokUploadToken("first", lib.tiktokConfig()), /Reconnect.*video.upload permission/);
 });
 
 test("keeps basic-only authorization available when inbox uploads are disabled", async () => {
@@ -246,4 +246,50 @@ test("keeps basic-only authorization available when inbox uploads are disabled",
   assert.equal(new URL(response.headers.get("location")).searchParams.get("scope"), "user.info.basic");
   await lib.connectTikTok("code", lib.tiktokConfig());
   assert.equal(saved, true);
+});
+
+test("requests Direct Post permission only when enabled", async () => {
+  const variables = { ...env, TIKTOK_DIRECT_POST_ENABLED: "true" };
+  const crypto = await load("src/lib/meta-crypto.ts", {}, null, variables);
+  let saved = false;
+  const lib = await load("src/lib/tiktok.ts", {
+    "@/src/lib/db": { db: { execute: async () => { saved = true; } } },
+    "@/src/lib/meta-crypto": crypto,
+  }, async (url) => url.includes("/oauth/token/")
+    ? Response.json(token("first"))
+    : Response.json({ data: { user: { open_id: "first", display_name: "Account" } }, error: { code: "ok" } }), variables);
+  const connect = await load("app/api/tiktok/connect/route.ts", { "@/src/lib/tiktok": lib }, null, variables);
+  const response = await start(connect);
+  assert.equal(new URL(response.headers.get("location")).searchParams.get("scope"), "user.info.basic,video.upload,video.publish");
+  await assert.rejects(() => lib.connectTikTok("code", lib.tiktokConfig()), /requested permissions/);
+  assert.equal(saved, false);
+});
+
+test("saves rotated refresh tokens even when TikTok removes the requested scope", async () => {
+  const crypto = await load("src/lib/meta-crypto.ts", {}, null);
+  const key = Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex");
+  let encrypted = crypto.encryptMetaSecret(JSON.stringify({
+    accessToken: "old-access", refreshToken: "old-refresh", scope: "user.info.basic,video.upload,video.publish",
+    accessExpiresAt: Date.now() - 1, refreshExpiresAt: Date.now() + 100000,
+  }), key);
+  const operations = [];
+  const connection = {
+    beginTransaction: async () => {},
+    execute: async (sql, params) => {
+      if (sql.startsWith("SELECT")) return [[{ encrypted_tokens: encrypted }]];
+      encrypted = params[0];
+      return [{ affectedRows: 1 }];
+    },
+    commit: async () => operations.push("commit"),
+    rollback: async () => operations.push("rollback"),
+    release: () => {},
+  };
+  const lib = await load("src/lib/tiktok.ts", {
+    "@/src/lib/db": { db: { getConnection: async () => connection } },
+    "@/src/lib/meta-crypto": crypto,
+  }, async () => Response.json({ ...token("first"), access_token: "new-access", refresh_token: "new-refresh" }));
+  await assert.rejects(() => lib.tiktokUploadToken("first", lib.tiktokConfig(), "video.publish"), /video.publish permission/);
+  assert.deepEqual(operations, ["commit"]);
+  assert.equal(JSON.parse(crypto.decryptMetaSecret(encrypted, key)).refreshToken, "new-refresh");
+  assert.equal(await lib.tiktokUploadToken("first", lib.tiktokConfig()), "new-access");
 });

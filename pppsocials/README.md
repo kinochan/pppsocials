@@ -298,8 +298,8 @@ including its terms, privacy policy, and data-deletion requirements.
 ## TikTok accounts
 
 The TikTok connection stores multiple accounts, authorized one at a time using
-Login Kit's `user.info.basic` scope. The optional inbox upload also requests
-`video.upload`; it does not post videos directly.
+Login Kit's `user.info.basic` scope. The optional inbox upload requests
+`video.upload`; the separately enabled Direct Post flow requests `video.publish`.
 
 Complete application login setup and block direct access to the Node.js port
 before enabling this feature. Administrators can add or reconnect accounts.
@@ -320,6 +320,8 @@ before enabling this feature. Administrators can add or reconnect accounts.
    - `TIKTOK_CONNECTION_ENABLED=true`: set only after protecting the app.
    - `TIKTOK_UPLOAD_ENABLED=true`: set only after TikTok approves `video.upload`
      and the upload table below has been created. Leave unset for basic access.
+   - `TIKTOK_DIRECT_POST_ENABLED=true`: set only after Direct Post setup below.
+     Leave unset to keep direct posting and its temporary media endpoint disabled.
 4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
    TikTok account** and authorize the intended account. Repeat for each account;
    reconnecting one updates only that account. Switch TikTok accounts if needed.
@@ -351,10 +353,39 @@ If an upload is interrupted or its result is uncertain, check its status and
 the TikTok inbox before resolving or retrying to avoid duplicate shares.
 Interrupted attempts can be resolved after 90 minutes.
 
+### TikTok Direct Post
+
 TikTok's [Direct Post guidelines](https://developers.tiktok.com/docs/en/content-sharing-guidelines)
-exclude private utilities for a team's own accounts. This integration uses the
-separate Upload API, not Direct Post; confirm its eligibility and any applicable
-terms with TikTok before deployment.
+exclude private utilities for a team's own accounts. The operator is responsible
+for confirming eligibility and obtaining `video.publish` approval. Sandbox
+configuration is not production approval. Unaudited clients are restricted to
+private accounts and private viewership; TikTok determines the available options.
+
+Before enabling Direct Post:
+
+1. Back up the database and apply `docs/tiktok-direct-posts.sql` once. Ensure
+   `ffprobe` is installed on the Node app's PATH.
+2. Verify the app's HTTPS domain or the `/api/tiktok-media/` URL prefix in the
+   TikTok app's URL properties. TikTok requires server-stored videos to use
+   `PULL_FROM_URL`.
+3. Configure the reverse proxy and every monitoring system to **exclude or
+   redact query strings and referrers** for `/api/tiktok-media/` in access,
+   error, and diagnostic logs. The query contains a bearer token. Verify that
+   the endpoint passes GET, HEAD, and Range requests without redirects, and
+   that no full media URL is logged. Do not enable Direct Post until this is
+   confirmed.
+4. Set `TIKTOK_DIRECT_POST_ENABLED=true`, deploy, rebuild, and restart. Reconnect
+   each account and grant `video.publish` along with the other enabled scopes.
+
+After explicit confirmation, the app creates a random temporary link for the
+chosen video, valid for up to an hour. Anyone with that link can access that
+video while it remains active; the rest of the Library stays protected. The
+link is revoked when the post finishes or is manually resolved. Do not share
+links. The app checks duration against TikTok's current creator limit, but does
+not convert or validate all media specifications. Users select privacy and
+disclosures for each post; TikTok may take time to process or moderate it.
+If the result is uncertain, check TikTok before resolving or retrying to avoid
+duplicates.
 
 ## Getting Started
 
