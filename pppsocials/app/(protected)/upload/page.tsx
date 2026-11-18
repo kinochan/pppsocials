@@ -152,7 +152,7 @@ export default function UploadPage() {
   }
 
   return (
-    <main className="p-8 max-w-2xl mx-auto">
+    <main className="max-w-2xl mx-auto sm:p-8">
       <h1 className="text-3xl font-bold mb-6">
         Upload Video
       </h1>
@@ -161,7 +161,7 @@ export default function UploadPage() {
         onSubmit={handleSubmit}
         className="space-y-4"
       >
-        <fieldset disabled={busy} className="space-y-4">
+        <fieldset disabled={busy} className="min-w-0 space-y-4">
         <div>
           <label className="block font-semibold mb-1">
             Title
@@ -204,6 +204,7 @@ export default function UploadPage() {
           <input
             type="file"
             accept="video/*"
+            className="block w-full"
             onChange={(e) =>
               setFile(
                 e.target.files?.[0] || null

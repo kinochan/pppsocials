@@ -61,7 +61,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <main className="p-2 sm:p-8">
+    <main className="sm:p-8">
       <h1 className="text-3xl font-bold mb-6">Video Library</h1>
 
       {status === "loading" && <p>Loading videos...</p>}

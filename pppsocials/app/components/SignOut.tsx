@@ -17,5 +17,5 @@ export default function SignOut() {
       setError("Unable to sign out. Please try again.");
     }
   }
-  return <span><button type="button" onClick={signOut}>Sign out</button> {error && <span role="alert">{error}</span>}</span>;
+  return <span className="max-w-full break-words"><button type="button" className="cursor-pointer underline" onClick={signOut}>Sign out</button> {error && <span role="alert">{error}</span>}</span>;
 }

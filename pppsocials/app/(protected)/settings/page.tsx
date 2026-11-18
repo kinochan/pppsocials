@@ -102,7 +102,7 @@ export default function SettingsPage() {
   }, []);
 
   return (
-    <main className="p-8 max-w-2xl mx-auto">
+    <main className="max-w-2xl mx-auto sm:p-8">
       <h1 className="text-3xl font-bold mb-6">Settings</h1>
       <section className="border rounded-lg p-4 bg-white shadow">
         <h2 className="text-xl font-semibold mb-3">Instagram</h2>

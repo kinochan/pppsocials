@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Suspense } from "react";
 import { currentUser } from "@/src/lib/access";
 import SignOut from "@/app/components/SignOut";
+import "./globals.css";
 
 export const metadata = {
   title: "PPP Socials",
@@ -13,7 +14,7 @@ async function Navigation() {
   const user = await currentUser(await headers());
   if (!user) return null;
   return (
-    <nav style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+    <nav aria-label="Main navigation" className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-gray-900 px-4 py-3 text-white sm:px-6">
       <Link href="/">Dashboard</Link>
       <Link href="/upload">Upload</Link>
       <Link href="/library">Library</Link>
@@ -33,7 +34,7 @@ export default function RootLayout({
       <body className="bg-gray-100 min-h-screen">
         <Suspense fallback={null}><Navigation /></Suspense>
 
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-7xl mx-auto p-4 sm:p-6">
           {children}
         </div>
       </body>
