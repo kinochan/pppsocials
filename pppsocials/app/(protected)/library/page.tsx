@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import StoryPublish from "@/app/components/StoryPublish";
 
 type Video = {
   id: string;
@@ -91,6 +92,7 @@ export default function LibraryPage() {
               {failedVideos.includes(video.id) && (
                 <p role="alert">Unable to play this video. The file may be missing or unsupported by your browser.</p>
               )}
+              <StoryPublish videoId={video.id} filename={video.filename} title={video.title} description={video.description ?? ""} />
               <button
                 type="button"
                 disabled={deleting !== null}

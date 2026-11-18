@@ -1,9 +1,10 @@
 import type { RowDataPacket } from "mysql2";
 import { db } from "@/src/lib/db";
-import { encryptMetaSecret } from "@/src/lib/meta-crypto";
+import { decryptMetaSecret, encryptMetaSecret } from "@/src/lib/meta-crypto";
 
 export const youtubeStateCookie = "__Host-youtube-oauth";
 export const youtubeReadonlyScope = "https://www.googleapis.com/auth/youtube.readonly";
+export const youtubeUploadScope = "https://www.googleapis.com/auth/youtube.upload";
 export class YouTubeConnectionError extends Error {}
 
 export function youtubeConfig() {
@@ -70,8 +71,9 @@ export async function connectYouTube(code: string, verifier: string, config: You
       typeof tokenResult.refresh_token !== "string" || !tokenResult.refresh_token) {
     throw new YouTubeConnectionError("Google did not return an access token and offline refresh token.");
   }
-  if (typeof tokenResult.scope !== "string" || !tokenResult.scope.split(" ").includes(youtubeReadonlyScope)) {
-    throw new YouTubeConnectionError("Google did not grant the required YouTube read-only permission.");
+  const scopes = typeof tokenResult.scope === "string" ? tokenResult.scope.split(" ") : [];
+  if (![youtubeReadonlyScope, youtubeUploadScope].every((scope) => scopes.includes(scope))) {
+    throw new YouTubeConnectionError("Google did not grant both required YouTube permissions.");
   }
 
   const channelUrl = new URL("https://www.googleapis.com/youtube/v3/channels");
@@ -115,4 +117,41 @@ export async function savedYouTubeChannels(): Promise<YouTubeChannelRow[]> {
     "SELECT channel_id AS id, title FROM youtube_channels ORDER BY title, channel_id"
   );
   return rows;
+}
+
+interface YouTubeTokenRow extends RowDataPacket {
+  encrypted_refresh_token: string;
+}
+
+export async function youtubePublishingToken(channelId: string, config: YouTubeConfig) {
+  const [rows] = await db.execute<YouTubeTokenRow[]>(
+    "SELECT encrypted_refresh_token FROM youtube_channels WHERE channel_id = ?", [channelId]
+  );
+  if (!rows.length) throw new YouTubeConnectionError("YouTube channel is not connected.");
+  const refreshToken = decryptMetaSecret(rows[0].encrypted_refresh_token, config.key);
+  const result = await googleRequest("https://oauth2.googleapis.com/token", "token refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  if (!isRecord(result) || typeof result.access_token !== "string" || !result.access_token) {
+    throw new YouTubeConnectionError("Google did not return an access token. Reconnect the channel.");
+  }
+  if (typeof result.scope === "string" && !result.scope.split(" ").includes(youtubeUploadScope)) {
+    throw new YouTubeConnectionError("Reconnect the channel and grant YouTube upload permission.");
+  }
+  const url = "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true";
+  const channel = await googleRequest(url, "channel lookup", {
+    headers: { Authorization: `Bearer ${result.access_token}` },
+  });
+  if (!isRecord(channel) || !Array.isArray(channel.items) || channel.items.length !== 1 ||
+      channel.nextPageToken || !isRecord(channel.items[0]) || channel.items[0].id !== channelId) {
+    throw new YouTubeConnectionError("The authorized YouTube channel changed. Reconnect the intended channel.");
+  }
+  return result.access_token;
 }

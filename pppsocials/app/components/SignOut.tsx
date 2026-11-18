@@ -8,7 +8,11 @@ export default function SignOut() {
   const router = useRouter();
   async function signOut() {
     try {
-      const response = await fetch("/api/auth/sign-out", { method: "POST" });
+      const response = await fetch("/api/auth/sign-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
       if (!response.ok) throw new Error("Sign out failed.");
       router.replace("/login");
       router.refresh();

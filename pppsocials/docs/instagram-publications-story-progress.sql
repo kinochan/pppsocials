@@ -1,0 +1,3 @@
+ALTER TABLE instagram_publications
+  ADD COLUMN media_type VARCHAR(16) CHARACTER SET ascii NOT NULL DEFAULT 'REELS',
+  ADD COLUMN upload_percent TINYINT UNSIGNED NULL;

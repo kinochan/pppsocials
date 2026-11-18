@@ -24,10 +24,11 @@
 
 ### Library
 - Edit video
-- Publish with a shared post description to Instagram, Facebook, TikTok, and YouTube Shorts
+- Publish Instagram Stories
+- Add Facebook Stories, TikTok, and YouTube Shorts publishing
 
 ### Integrations
 - YouTube: connect channels read-only; Shorts publishing still needed
 - Facebook: connect Pages with Facebook Login for Business; Story publishing still needed
-- Instagram: connect professional accounts with Unified Login; publishing and webhooks still needed
+- Instagram: connect professional accounts with Unified Login; webhooks still needed
 - TikTok: connect accounts with basic access; video publishing still needed

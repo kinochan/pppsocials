@@ -221,6 +221,23 @@ test("writes video data before the complete request has arrived", async () => {
   }
 });
 
+test("saves a video larger than Next.js Proxy's default 10 MB limit", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pppsocials-upload-"));
+  try {
+    const post = await loadHandler(directory, async () => {});
+    const form = new FormData();
+    form.set("title", "Large video");
+    form.set("description", "");
+    form.set("file", new File([Buffer.alloc(10 * 1024 * 1024 + 1)], "clip.mp4"));
+    const response = await post(new Request("http://localhost/api/upload", { method: "POST", body: form }));
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal((await stat(result.savedTo)).size, 10 * 1024 * 1024 + 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("cleans up an interrupted multipart upload", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "pppsocials-upload-"));
   try {

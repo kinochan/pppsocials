@@ -63,9 +63,10 @@ the new file is removed when possible and the upload reports an error. Existing
 files are not imported.
 
 The Library lists uploaded records and streams their files for playback. Playback
-depends on the video format and codec supported by the browser. Publishing and
-post descriptions are not implemented yet. The Library and video endpoints
-require an application login.
+depends on the video format and codec supported by the browser. Instagram and
+Facebook Page Story publishing, YouTube uploads, and TikTok inbox uploads are
+available as described below. The Library and video endpoints require an
+application login.
 
 If an existing `videos` table was created from an older version of
 `docs/videos.sql` and has no `filename` column, back up the database, stop
@@ -109,10 +110,14 @@ Check for a lower limit in any `/api/upload` location or upstream proxy, then
 test the Nginx configuration and reload it. Ensure the app's `uploads` directory
 is writable and has enough free disk space.
 
+The upload endpoint is excluded from Next.js Proxy so large uploads are streamed
+without Proxy's request-body buffering limit. The upload route itself enforces
+the application login and same-origin checks.
+
 ## Instagram connection
 
 The Instagram connection uses Meta's Instagram API with Unified Login and stores
-one shared business connection for the app. It does not publish videos yet.
+one shared business connection for the app.
 
 The connections are disabled by default. Complete application login setup before
 enabling them, and restrict direct access to the Node.js port. Only application
@@ -146,7 +151,42 @@ any other proxy or monitoring system not to log query strings for
 `/api/instagram/callback`. Tokens are encrypted before storage and are not
 returned to the browser. Do not share screenshots containing tokens or secrets.
 Meta app review and appropriate access levels may be needed for users without
-app roles. Webhooks and Instagram publishing are not implemented yet.
+app roles. Webhooks are not implemented.
+
+### Publishing Instagram Stories
+
+Back up the database and wait for ongoing publishing attempts to finish before
+stopping the app for deployment. If the `instagram_publications` table does not
+exist, apply `docs/instagram-publications.sql` once. If it already exists from
+the earlier Reel publisher, apply `docs/instagram-publications-story-progress.sql`
+once instead; do not rerun either script if its changes already exist. The
+migration preserves existing attempts and identifies them as Reels.
+
+Configure the Unified Login permissions to include `instagram_content_publish`,
+and reconnect the Instagram account if necessary to grant it. Meta access levels,
+app review, or Page publishing authorization may also be required.
+
+Every signed-in user can select a Library video, choose connected Instagram
+accounts, and confirm Story publishing. The Library description is not added as
+text to the Story. The app streams the video directly to Meta; it does not make
+the Library publicly accessible. Meta specifies Story videos of 3-60 seconds
+and at most 100 MB (100,000,000 bytes), along with other format requirements.
+The app rejects larger files but does not check duration or convert videos.
+Check [Meta's specifications](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media)
+before publishing.
+
+The Library records each account's status and refreshes it while open. The
+upload percentage measures bytes read for transfer to Meta, not receipt by Meta;
+100% is shown only once Meta confirms the upload. Processing and publishing
+have indeterminate progress because Meta does not report a percentage.
+
+The app must remain running during uploads and processing. If the server stops,
+the request is interrupted, or the final Meta response is lost, the result may
+be uncertain. Check the Instagram account before resolving an uncertain or
+stalled attempt and trying again: otherwise a duplicate may be published.
+Uncertain attempts can be resolved immediately; interrupted attempts become
+resolvable after 90 minutes. Meta may take additional time to show a published
+Story. A webhook is not used for this publishing flow.
 
 ## Facebook Page connection
 
@@ -162,13 +202,40 @@ blocking direct access to the Node.js port. The connection shares `APP_URL`,
 Use **Connect Facebook Pages** in Settings to grant access. Reconnecting
 replaces the saved Pages. Page tokens are encrypted on the server and never
 sent to the browser. App Review, Page permissions, and Page publishing
-authorization may be required. This connection does not publish Stories yet.
+authorization may be required.
+
+### Publishing Facebook Page Stories
+
+Back up the database, then apply `docs/facebook-publications.sql` once to the
+app database before deploying this version. Do not rerun it if the table already
+exists. Rebuild and restart the app after deployment.
+
+The Facebook Login for Business configuration must grant `pages_manage_posts`,
+`pages_read_engagement`, and `pages_show_list`; the Page must grant the user
+`CREATE_CONTENT`. Reconnect the Pages if new permissions need to be granted.
+App Review and Page publishing authorization may also be needed.
+
+Every signed-in user can open **Publish** on a Library video, choose connected
+Facebook Pages, and confirm a Story for those Pages. Instagram and Facebook
+are submitted separately. The Library description is not added as text.
+The video is streamed directly to Meta, without making the Library public. Meta
+requires videos of at least 3 seconds and states that video Stories cannot exceed
+60 seconds, with additional [format requirements](https://developers.facebook.com/docs/page-stories-api/).
+The app does not check duration or convert videos.
+
+Upload progress measures bytes read for transfer; 100% appears only after Meta
+confirms the upload. A successful finish response is recorded as published,
+although Meta may take additional time to process or display the Story. Keep the
+app running during publishing. If a final response is lost or the app stops,
+check the Facebook Page before resolving or retrying, to avoid duplicates.
+Uncertain attempts can be resolved immediately; interrupted attempts become
+resolvable after 90 minutes.
 
 ## YouTube channels
 
 The YouTube connection stores multiple channels, authorized one at a time. It
-requests only the `youtube.readonly` scope; Shorts publishing is not implemented
-and will require additional authorization.
+requests `youtube.readonly` to identify the channel and `youtube.upload` to
+upload videos.
 
 Complete application login setup and block direct access to the Node.js port
 before enabling this feature. Administrators can add or reconnect channels.
@@ -185,9 +252,12 @@ before enabling this feature. Administrators can add or reconnect channels.
      the existing integrations, encoded as 64 hex characters. Back it up
      securely; changing it makes saved refresh tokens unreadable.
    - `YOUTUBE_CONNECTION_ENABLED=true`: set only after protecting the app.
-4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
-   YouTube channel** and authorize the intended channel. Repeat for each
-   channel; reconnecting one updates only that channel.
+4. Back up the database and apply `docs/youtube-publications.sql` once if the
+   `youtube_publications` table does not already exist. Deploy, rebuild, and
+   restart the Node app. In Settings, choose **Connect a YouTube channel** and
+   grant both permissions for the intended channel. Repeat for each channel;
+   reconnecting one updates only that channel. Channels connected before YouTube
+   uploading was added must be reconnected to grant upload access.
 
 Google may require OAuth verification, and an external app in testing must add
 the relevant Google accounts as test users. Testing-mode refresh tokens can
@@ -196,11 +266,40 @@ Settings shows saved channels without checking whether their tokens still work.
 Do not log query strings or sensitive referrers for `/api/youtube/callback`;
 the callback contains a temporary authorization code.
 
+### Uploading YouTube Shorts
+
+Every signed-in user can open **Publish** on a Library video and select YouTube
+channels. The YouTube title and description are prefilled from the Library and
+can be edited for the upload; changes do not modify the Library. Choose public
+(the default), private, or unlisted, declare the audience and altered-content
+setting, certify compliance with YouTube's Community Guidelines, and confirm the
+upload. Uploads to different platforms are submitted separately.
+
+Install `ffprobe` (part of FFmpeg) on the app server and ensure it is available
+on the Node app's `PATH`. Before uploading, the app checks that the video is
+square or vertical and no longer than three minutes, including rotation metadata.
+The check requires exactly one non-cover-art video stream.
+If `ffprobe` is unavailable or cannot read the video, the upload is blocked.
+Videos are not converted. YouTube makes the final classification; see
+[YouTube's Shorts guidance](https://support.google.com/youtube/answer/15424877).
+
+Progress shows bytes acknowledged by YouTube. Once YouTube accepts the upload,
+the app shows the returned privacy setting if available; check YouTube Studio for
+the actual privacy and processing status, since YouTube or channel settings may
+change the requested privacy. Keep the app running during uploads. If the result
+is uncertain or the app stops, check YouTube Studio before resolving or retrying
+to avoid duplicates. Uncertain attempts can be resolved immediately; interrupted
+attempts become resolvable after 90 minutes.
+
+Before making the integration available to users, the operator must also review
+and meet [YouTube's API policies](https://developers.google.com/youtube/terms/developer-policies),
+including its terms, privacy policy, and data-deletion requirements.
+
 ## TikTok accounts
 
 The TikTok connection stores multiple accounts, authorized one at a time using
-Login Kit's `user.info.basic` scope. It does not publish videos; posting requires
-additional TikTok permissions, review, and implementation.
+Login Kit's `user.info.basic` scope. The optional inbox upload also requests
+`video.upload`; it does not post videos directly.
 
 Complete application login setup and block direct access to the Node.js port
 before enabling this feature. Administrators can add or reconnect accounts.
@@ -209,6 +308,8 @@ before enabling this feature. Administrators can add or reconnect accounts.
 2. Create an app at [TikTok for Developers](https://developers.tiktok.com/),
    add **Login Kit** for web, and register the exact redirect URI
    `<APP_URL>/api/tiktok/callback`. Configure the `user.info.basic` scope.
+   For inbox uploads, add the Content Posting API and obtain approval for
+   `video.upload`. Confirm with TikTok that your intended app use is eligible.
 3. Configure these server-side environment variables (never commit or share
    the client secret):
    - `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`: the selected TikTok app's credentials.
@@ -217,17 +318,43 @@ before enabling this feature. Administrators can add or reconnect accounts.
      existing integrations. Back it up securely; changing it makes saved
      tokens unreadable.
    - `TIKTOK_CONNECTION_ENABLED=true`: set only after protecting the app.
+   - `TIKTOK_UPLOAD_ENABLED=true`: set only after TikTok approves `video.upload`
+     and the upload table below has been created. Leave unset for basic access.
 4. Deploy, rebuild, and restart the Node app. In Settings, choose **Connect a
    TikTok account** and authorize the intended account. Repeat for each account;
    reconnecting one updates only that account. Switch TikTok accounts if needed.
 
 TikTok offers [sandbox testing](https://developers.tiktok.com/doc/add-a-sandbox/)
 with separate sandbox credentials and target users. Production access requires
-TikTok review. The stored access and refresh tokens are encrypted; this app does
-not yet refresh them automatically. Expired or revoked connections require
+TikTok review. The stored access and refresh tokens are encrypted and refreshed
+when needed for uploads; expired refresh tokens or revoked access require
 reconnecting. Settings shows saved accounts without checking token validity.
 Do not log query strings or sensitive referrers for `/api/tiktok/callback`;
 the callback contains a temporary authorization code.
+
+### Sending videos to the TikTok inbox
+
+Back up the database and apply `docs/tiktok-uploads.sql` once. Enable
+`TIKTOK_UPLOAD_ENABLED`, deploy, rebuild, and restart the app. Reconnect each
+TikTok account in Settings and grant the requested upload permission.
+
+In the Library, choose **Publish**, select TikTok accounts, and confirm **Send to
+TikTok inbox**. TikTok sends an inbox notification; open it in TikTok to edit the
+video, enter a caption, choose privacy, and publish. The Library title and
+description are not sent. Use **Check TikTok status** to check delivery;
+delivery does not mean the video has been published.
+
+The app sends MP4, MOV, and WebM files without conversion. TikTok also imposes
+[codec, duration, frame rate, and size limits](https://developers.tiktok.com/docs/en/content-posting-api-media-transfer-guide).
+TikTok limits pending inbox shares. Keep the app running during transfer.
+If an upload is interrupted or its result is uncertain, check its status and
+the TikTok inbox before resolving or retrying to avoid duplicate shares.
+Interrupted attempts can be resolved after 90 minutes.
+
+TikTok's [Direct Post guidelines](https://developers.tiktok.com/docs/en/content-sharing-guidelines)
+exclude private utilities for a team's own accounts. This integration uses the
+separate Upload API, not Direct Post; confirm its eligibility and any applicable
+terms with TikTok before deployment.
 
 ## Getting Started
 
