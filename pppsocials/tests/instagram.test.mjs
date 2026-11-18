@@ -90,10 +90,12 @@ test("connects accounts across pages and saves the token encrypted", async () =>
   assert.equal(calls[3].url.searchParams.get("after"), "cursor-1");
   assert.equal(calls[2].options.headers.Authorization, "Bearer private-token");
   assert.equal(saved.length, 1);
-  const [business, config, accounts, encrypted] = saved[0][1];
-  assert.equal(business, "business-1");
-  assert.equal(config, "configuration-id");
-  assert.deepEqual(JSON.parse(accounts), [{ id: "1", username: "first" }, { id: "2", username: "second" }]);
+  assert.match(saved[0][0], /INSERT INTO instagram_accounts/);
+  const values = saved[0][1];
+  assert.equal(values.length, 6);
+  assert.deepEqual([values[0], values[1], values[3], values[4]], ["1", "first", "2", "second"]);
+  const encrypted = values[2];
+  assert.equal(values[5], encrypted);
   assert.ok(!encrypted.includes("private-token"));
   const [iv, tag, ciphertext] = encrypted.split(".").map((part) => Buffer.from(part, "base64"));
   const decipher = createDecipheriv("aes-256-gcm", Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex"), iv);
@@ -121,16 +123,33 @@ test("identifies which Meta request failed without exposing credentials", async 
   }
 });
 
-test("loads the selected account list and encrypted token together for publishing", async () => {
+test("loads the selected account and its encrypted token for publishing", async () => {
   const crypto = await load("src/lib/meta-crypto.ts", {}, undefined);
   const key = Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex");
   const encrypted = crypto.encryptMetaSecret("private-token", key);
   const { lib } = await setup(undefined, async (sql) => {
-    assert.match(sql, /SELECT accounts, encrypted_token/);
-    return [[{ accounts: JSON.stringify([{ id: "123", username: "test" }]), encrypted_token: encrypted }]];
+    assert.match(sql, /FROM instagram_accounts WHERE account_id = \?/);
+    return [[{ id: "123", username: "test", encrypted_token: encrypted }]];
   });
-  assert.deepEqual(await lib.instagramPublishingConnection(key), {
-    accounts: [{ id: "123", username: "test" }], token: "private-token",
+  assert.deepEqual(await lib.instagramPublishingConnection("123", key), {
+    account: { id: "123", username: "test" }, token: "private-token",
+  });
+});
+
+test("includes legacy accounts and keeps their publishing tokens available", async () => {
+  const crypto = await load("src/lib/meta-crypto.ts", {}, undefined);
+  const key = Buffer.from(env.INSTAGRAM_TOKEN_KEY, "hex");
+  const encrypted = crypto.encryptMetaSecret("legacy-token", key);
+  const { lib } = await setup(undefined, async (sql) => {
+    if (sql.includes("FROM instagram_accounts")) return [[]];
+    return [[{
+      accounts: JSON.stringify([{ id: "456", username: "legacy" }]),
+      encrypted_token: encrypted,
+    }]];
+  });
+  assert.deepEqual(await lib.savedInstagramAccounts(), [{ id: "456", username: "legacy" }]);
+  assert.deepEqual(await lib.instagramPublishingConnection("456", key), {
+    account: { id: "456", username: "legacy" }, token: "legacy-token",
   });
 });
 

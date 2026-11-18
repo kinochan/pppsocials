@@ -247,9 +247,9 @@ test("publishing route permits signed-in users and schedules only selected conne
     "@/src/lib/db": { db },
     "@/src/lib/instagram": {
       instagramConfig: () => ({ key: Buffer.alloc(32) }),
-      instagramPublishingConnection: async () => ({
-        accounts: [{ id: "123", username: "test" }], token: "secret",
-      }),
+      instagramPublishingConnection: async (accountId) => accountId === "123" ? ({
+        account: { id: accountId, username: "test" }, token: "secret",
+      }) : null,
       savedInstagramAccounts: async () => [{ id: "123", username: "test" }],
     },
     "@/src/lib/instagram-publish": { publishInstagramStory: async (job) => calls.push(job) },
@@ -314,7 +314,9 @@ test("duplicate publication attempts are rejected without scheduling another upl
     } } },
     "@/src/lib/instagram": {
       instagramConfig: () => ({ key: Buffer.alloc(32) }),
-      instagramPublishingConnection: async () => ({ accounts: [{ id: "123", username: "test" }], token: "secret" }),
+      instagramPublishingConnection: async (accountId) => accountId === "123" ? ({
+        account: { id: accountId, username: "test" }, token: "secret",
+      }) : null,
     },
     "@/src/lib/instagram-publish": { publishInstagramStory: async () => {} },
     "@/src/lib/videos": { validVideoId: () => true },

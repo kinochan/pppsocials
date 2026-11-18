@@ -119,12 +119,14 @@ export async function connectInstagram(code: string, config: InstagramConfig) {
   const encryptedToken = encryptMetaSecret(token, config.key);
 
   try {
+    const uniqueAccounts = [...new Map(accounts.map((account) => [account.id, account])).values()];
+    const placeholders = uniqueAccounts.map(() => "(?, ?, ?)").join(", ");
+    const values = uniqueAccounts.flatMap((account) => [account.id, account.username, encryptedToken]);
     await db.execute(
-      `INSERT INTO instagram_connection (id, business_id, config_id, accounts, encrypted_token)
-       VALUES (1, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE business_id = VALUES(business_id), config_id = VALUES(config_id),
-         accounts = VALUES(accounts), encrypted_token = VALUES(encrypted_token)`,
-      [business.client_business_id, config.configId, JSON.stringify(accounts), encryptedToken]
+      `INSERT INTO instagram_accounts (account_id, username, encrypted_token)
+       VALUES ${placeholders}
+       ON DUPLICATE KEY UPDATE username = VALUES(username), encrypted_token = VALUES(encrypted_token)`,
+      values
     );
   } catch {
     throw new InstagramConnectionError("Could not save the Instagram connection in the database.");
@@ -133,6 +135,15 @@ export async function connectInstagram(code: string, config: InstagramConfig) {
 
 interface ConnectionRow extends RowDataPacket {
   accounts: string;
+}
+
+interface InstagramAccountRow extends RowDataPacket {
+  id: string;
+  username: string;
+}
+
+function mergeAccounts(...groups: InstagramAccount[][]): InstagramAccount[] {
+  return [...new Map(groups.flat().map((account) => [account.id, account])).values()];
 }
 
 function parseAccounts(value: string): InstagramAccount[] {
@@ -146,23 +157,47 @@ function parseAccounts(value: string): InstagramAccount[] {
 }
 
 export async function savedInstagramAccounts(): Promise<InstagramAccount[] | null> {
-  const [rows] = await db.execute<ConnectionRow[]>(
-    "SELECT accounts FROM instagram_connection WHERE id = 1"
-  );
-  return rows.length === 0 ? null : parseAccounts(rows[0].accounts);
+  const [[accounts], [connections]] = await Promise.all([
+    db.execute<InstagramAccountRow[]>(
+      "SELECT account_id AS id, username FROM instagram_accounts ORDER BY username, account_id"
+    ),
+    db.execute<ConnectionRow[]>(
+      "SELECT accounts FROM instagram_connection WHERE id = 1"
+    ),
+  ]);
+  const legacyAccounts = connections.length ? parseAccounts(connections[0].accounts) : [];
+  const saved = mergeAccounts(legacyAccounts, accounts);
+  return saved.length ? saved : null;
 }
 
 interface PublishingConnectionRow extends ConnectionRow {
   encrypted_token: string;
 }
 
-export async function instagramPublishingConnection(key: Buffer) {
-  const [rows] = await db.execute<PublishingConnectionRow[]>(
+interface InstagramPublishingAccountRow extends InstagramAccountRow {
+  encrypted_token: string;
+}
+
+export async function instagramPublishingConnection(accountId: string, key: Buffer) {
+  const [accounts] = await db.execute<InstagramPublishingAccountRow[]>(
+    "SELECT account_id AS id, username, encrypted_token FROM instagram_accounts WHERE account_id = ?",
+    [accountId]
+  );
+  if (accounts.length) {
+    return {
+      account: { id: accounts[0].id, username: accounts[0].username },
+      token: decryptMetaSecret(accounts[0].encrypted_token, key),
+    };
+  }
+
+  const [connections] = await db.execute<PublishingConnectionRow[]>(
     "SELECT accounts, encrypted_token FROM instagram_connection WHERE id = 1"
   );
-  if (!rows.length) return null;
+  if (!connections.length) return null;
+  const account = parseAccounts(connections[0].accounts).find((item) => item.id === accountId);
+  if (!account) return null;
   return {
-    accounts: parseAccounts(rows[0].accounts),
-    token: decryptMetaSecret(rows[0].encrypted_token, key),
+    account,
+    token: decryptMetaSecret(connections[0].encrypted_token, key),
   };
 }
