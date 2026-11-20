@@ -94,9 +94,9 @@ export async function POST(request: Request) {
   try {
     const config = instagramConfig();
     if (!config) return Response.json({ message: "Instagram connection is disabled." }, { status: 503 });
-    const connection = await instagramPublishingConnection(config.key);
-    const account = connection?.accounts.find((item) => item.id === input.accountId);
-    if (!connection || !account) return Response.json({ message: "Instagram account is not connected." }, { status: 400 });
+    const connection = await instagramPublishingConnection(input.accountId, config.key);
+    if (!connection) return Response.json({ message: "Instagram account is not connected." }, { status: 400 });
+    const { account } = connection;
     const [videos] = await db.execute<VideoRow[]>("SELECT filename, filepath FROM videos WHERE id = ?", [input.videoId]);
     if (!videos.length || videos[0].filename !== input.filename) {
       return Response.json({ message: "The video changed. Refresh the library and try again." }, { status: 409 });

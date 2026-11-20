@@ -107,7 +107,8 @@ export default function SettingsPage() {
       <section className="border rounded-lg p-4 bg-white shadow">
         <h2 className="text-xl font-semibold mb-3">Instagram</h2>
         <p className="mb-3">
-          Connect a professional Instagram account to prepare for publishing.
+          Connect one or more professional Instagram accounts to prepare for publishing.
+          You can connect accounts from additional Meta business portfolios without replacing saved accounts.
           Meta will request access to the account and the permissions configured in your Meta app.
         </p>
         {result && <p role="status" className="mb-3 text-green-700">{result}</p>}
@@ -128,7 +129,7 @@ export default function SettingsPage() {
             ) : <p className="mb-3">No Instagram account connected.</p>}
             <form action="/api/instagram/connect" method="post">
               <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                {status.accounts ? "Reconnect or replace accounts" : "Connect Instagram"}
+                {status.accounts ? "Connect another Instagram account" : "Connect Instagram"}
               </button>
             </form>
           </>

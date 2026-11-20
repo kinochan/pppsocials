@@ -117,17 +117,30 @@ the application login and same-origin checks.
 ## Instagram connection
 
 The Instagram connection uses Meta's Instagram API with Unified Login and stores
-one shared business connection for the app.
+multiple professional Instagram accounts for the app. Each saved account keeps
+its own encrypted Meta token.
 
 The connections are disabled by default. Complete application login setup before
 enabling them, and restrict direct access to the Node.js port. Only application
 administrators can access social settings and connection routes.
 
-1. Apply `docs/instagram.sql` to the same MySQL database as the app:
+1. For a new installation, apply `docs/instagram.sql` to the same MySQL database
+   as the app:
 
    ```bash
    mysql -u YOUR_USER -p YOUR_DATABASE < docs/instagram.sql
    ```
+
+   For an existing installation, back up the database and apply the additive
+   schema change once:
+
+   ```bash
+   mysql -u YOUR_USER -p YOUR_DATABASE < docs/instagram-multiple-accounts.sql
+   ```
+
+   The existing connection table and saved accounts are retained; there is no
+   data-copy step. The app continues to publish to existing accounts until they
+   are reconnected and saved in the new per-account table.
 
 2. Set these server-side environment variables (never commit them to GitHub):
    - `APP_URL`: the app's public HTTPS origin, for example `https://mbasocials.mbattractions.com`
@@ -143,8 +156,9 @@ administrators can access social settings and connection routes.
    match `APP_URL` exactly. Configure HTTPS and restart the Node.js app after
    setting its environment variables.
 4. Open Settings and select **Connect Instagram**. Approve access and select
-   the intended business portfolio and Instagram account(s). Reconnecting
-   replaces the previously saved connection.
+   the intended business portfolio and Instagram account(s). Select **Connect
+   another Instagram account** to authorize an additional business portfolio;
+   this adds or updates only accounts included in that authorization.
 
 The callback URL contains a temporary authorization code. Configure Nginx and
 any other proxy or monitoring system not to log query strings for
