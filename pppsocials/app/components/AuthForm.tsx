@@ -45,7 +45,7 @@ export default function AuthForm({ setup = false }: { setup?: boolean }) {
 
   return (
     <main className="mx-auto my-8 max-w-[420px] sm:my-12">
-      <h1 className="mb-6 text-3xl font-bold">{setup ? "First administrator setup" : "Sign in to PPP Socials"}</h1>
+      <h1 className="mb-6 text-3xl font-bold">{setup ? "First administrator setup" : "Sign in to MBA Socials"}</h1>
       <form onSubmit={submit} className="grid gap-3">
         {setup && <label>Setup secret<input name="secret" type="password" autoComplete="off" required className="mt-1 block w-full rounded border bg-white p-2" /></label>}
         <label>Email<input name="email" type="email" autoComplete="username" required maxLength={191} className="mt-1 block w-full rounded border bg-white p-2" /></label>
