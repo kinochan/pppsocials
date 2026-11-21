@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Privacy Policy | PPP Socials",
-  description: "How PPP Socials handles information in this deployment.",
+  title: "Privacy Policy | MBA Social Hub",
+  description: "How MBA Social Hub handles information in this deployment.",
 };
 
 export default function PrivacyPolicyPage() {
@@ -12,7 +12,7 @@ export default function PrivacyPolicyPage() {
         <p className="text-sm text-gray-600">Last updated: November 19, 2026</p>
         <h1 className="text-3xl font-bold">Privacy Policy</h1>
         <p>
-          This policy describes information handled by this PPP Socials
+          This policy describes information handled by this MBA Social Hub
           deployment (the “Service”). The person or organization that hosts and
           administers it (“Operator”) determines how it is operated and is the
           contact for privacy requests. Ask the deployment administrator for

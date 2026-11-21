@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Terms of Service | PPP Socials",
-  description: "Terms for using PPP Socials.",
+  title: "Terms of Service | MBA Social Hub",
+  description: "Terms for using MBA Social Hub.",
 };
 
 export default function TermsOfServicePage() {
@@ -12,7 +12,7 @@ export default function TermsOfServicePage() {
         <p className="text-sm text-gray-600">Last updated: November 19, 2026</p>
         <h1 className="text-3xl font-bold">Terms of Service</h1>
         <p>
-          These terms apply to your use of this PPP Socials deployment (the
+          These terms apply to your use of this MBA Social Hub deployment (the
           “Service”). By using the Service, you agree to these terms. If you do
           not agree, do not use it.
         </p>
@@ -21,7 +21,7 @@ export default function TermsOfServicePage() {
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">1. The Service and your account</h2>
         <p>
-          PPP Socials helps authorized users store videos and send them to
+          MBA Social Hub helps authorized users store videos and send them to
           connected social media accounts. The organization or person operating
           this deployment (“Operator”) controls access. There is no public
           sign-up; an Operator administrator creates and manages accounts.
@@ -89,7 +89,7 @@ export default function TermsOfServicePage() {
       <section className="space-y-2">
         <h2 className="text-xl font-semibold">5. Contact</h2>
         <p>
-          Contact the administrator of this PPP Socials deployment with
+          Contact the administrator of this MBA Social Hub deployment with
           questions about these terms or your access. For information about
           personal data, see the <Link className="underline underline-offset-2" href="/policy">Privacy Policy</Link>.
         </p>

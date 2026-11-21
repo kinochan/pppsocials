@@ -6,7 +6,7 @@ import SignOut from "@/app/components/SignOut";
 import "./globals.css";
 
 export const metadata = {
-  title: "PPP Socials",
+  title: "MBA Social Hub",
   description: "Cross-Platform Social Video Posting",
 };
 

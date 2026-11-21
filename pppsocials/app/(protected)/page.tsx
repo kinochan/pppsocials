@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main>
       <h1 className="text-4xl font-bold mb-4">
-        PPP Socials
+        MBA Social Hub
       </h1>
 
       <p className="text-lg">

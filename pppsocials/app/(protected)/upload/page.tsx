@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Match = {
   id: string;
@@ -11,10 +12,11 @@ type Match = {
 };
 
 export default function UploadPage() {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "checking" | "choosing" | "uploading" | "processing" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "checking" | "choosing" | "uploading" | "processing" | "error">("idle");
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
@@ -113,10 +115,11 @@ export default function UploadPage() {
       const isResult = typeof result === "object" && result !== null;
       if (request.status >= 200 && request.status < 300 && isResult &&
           "success" in result && result.success === true) {
-        setStatus("success");
-        const warning = "warning" in result && typeof result.warning === "string" ? ` ${result.warning}` : "";
-        setMessage(`${replacement ? "Video replaced." : "Upload complete."}${warning}`);
-        setMatches([]);
+        const params = new URLSearchParams({ upload: replacement ? "replaced" : "complete" });
+        if ("warning" in result && typeof result.warning === "string") {
+          params.set("warning", result.warning);
+        }
+        router.push(`/library?${params}`);
       } else {
         const errorMessage = request.status === 413
           ? "The video is too large for the server to accept. The maximum video size is 1 GB."

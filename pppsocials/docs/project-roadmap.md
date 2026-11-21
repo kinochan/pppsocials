@@ -1,4 +1,4 @@
-# PPP Socials
+# MBA Social Hub
 
 ## Current Features
 - Next.js 16

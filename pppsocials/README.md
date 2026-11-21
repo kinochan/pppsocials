@@ -56,8 +56,9 @@ the MySQL database, then apply the schema once to that database:
 mysql -u YOUR_USER -p YOUR_DATABASE < docs/videos.sql
 ```
 
-New uploads save their title, description, generated filename, and path relative
-to the application directory in the `videos` table. Files are stored in the
+Successful uploads and replacements open the Library automatically. New uploads
+save their title, description, generated filename, and path relative to the
+application directory in the `videos` table. Files are stored in the
 application's `uploads` directory with unique names. If saving metadata fails,
 the new file is removed when possible and the upload reports an error. Existing
 files are not imported.

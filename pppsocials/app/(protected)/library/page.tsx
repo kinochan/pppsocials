@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import StoryPublish from "@/app/components/StoryPublish";
 
 type Video = {
@@ -10,6 +11,19 @@ type Video = {
   filename: string;
   original_filename: string | null;
 };
+
+function UploadNotice() {
+  const params = useSearchParams();
+  const upload = params.get("upload");
+  if (upload !== "complete" && upload !== "replaced") return null;
+  const warning = params.get("warning");
+  return (
+    <p role="status" className="mb-4">
+      {upload === "replaced" ? "Video replaced." : "Upload complete."}
+      {warning && ` ${warning}`}
+    </p>
+  );
+}
 
 export default function LibraryPage() {
   const [videos, setVideos] = useState<Video[]>([]);
@@ -65,6 +79,7 @@ export default function LibraryPage() {
     <main className="sm:p-8">
       <h1 className="text-3xl font-bold mb-6">Video Library</h1>
 
+      <Suspense fallback={null}><UploadNotice /></Suspense>
       {status === "loading" && <p>Loading videos...</p>}
       {status === "error" && <p role="alert">Unable to load videos. Please try again later.</p>}
       {message && <p role="status" className="mb-4">{message}</p>}
